@@ -65,3 +65,16 @@ test("Customer 360 routes load the selected account fixture", async () => {
   assert.match(source, /initialAccountId=\{id\}/);
   assert.match(source, /notFound\(\)/);
 });
+
+test("the Risk Queue offers an evidence-linked graph view", async () => {
+  const [source, styles] = await Promise.all([
+    readFile(new URL("components/value-loop-app.tsx", root), "utf8"),
+    readFile(new URL("app/globals.css", root), "utf8"),
+  ]);
+  assert.match(source, /function ChurnIssueMap/);
+  assert.match(source, /Account → pathway → leading issue/);
+  assert.match(source, /Open evidence file/);
+  assert.match(source, /aria-pressed=\{view === "graph"\}/);
+  assert.match(styles, /\.issue-map-layout/);
+  assert.match(styles, /\.cause-panel \{ background:#f3f2eb/);
+});

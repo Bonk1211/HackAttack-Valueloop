@@ -461,7 +461,7 @@ Figure 3. Detailed hackathon prototype architecture.
 | **Route**      | **Screen**         | **Key content**                                            |
 |----------------|--------------------|------------------------------------------------------------|
 | /              | Overview dashboard | KPIs, risk distribution, freshness, priority queue         |
-| /risk-queue    | Risk queue         | Filters, risk types, at-risk MRR, urgency                  |
+| /risk-queue    | Risk queue         | Filters, graph/table views, churn pathways, leading issues, at-risk MRR and urgency |
 | /accounts/{id} | Customer 360       | Profile, health, timeline, risks, causes, actions          |
 | /approvals     | Approval inbox     | Sensitive pending actions, evidence, approve/modify/reject |
 | /outcomes      | Outcome dashboard  | Interventions, acceptance, overrides, observed deltas      |
@@ -473,7 +473,7 @@ Figure 3. Detailed hackathon prototype architecture.
 1. Header: account name, plan, MRR, renewal date, owner and data freshness.
 2. Health row: five component cards with trend and evidence count.
 3. Risk panel: separate risks, confidence and top contributors.
-4. Cause panel: ranked hypotheses with supporting and contradictory signals.
+4. Cause case file: ranked hypotheses with supporting and contradictory signals on a light evidence surface.
 5. Action panel: recommended action, eligible alternatives, rejected actions and approval status.
 6. Timeline: usage, payment, support, feedback and intervention events.
 7. Audit strip: latest decision version and actor.

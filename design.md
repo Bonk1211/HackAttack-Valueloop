@@ -10,7 +10,7 @@ ValueLoop should feel like a calm, trustworthy decision workspace—not a generi
 - **Customer Success Dashboard:** dense, sortable risk queue and account prioritization;
 - **PulsePay:** crisp subscription, MRR, renewal, and payment KPI treatment;
 - **Daft Studio Customer Analytics:** fixed sidebar, pale canvas, rounded white cards, compact charts, and profile-led Customer 360 layout;
-- **Dark Customer Experience Dashboard:** high-contrast cause, evidence, and recommendation panels.
+- **Editorial evidence file:** warm paper surfaces, ruled evidence columns, and restrained selected states for cause review.
 
 The supplied reference influences visual language and composition only. Its social profile, interests, spending categories, campaigns, and brand-preference features must not be copied.
 
@@ -108,9 +108,11 @@ The selected Northstar Labs panel is a warm paper “risk pass” inspired by a 
 
 ### 5.2 Risk Queue
 
-Use a full-width operational table with sticky headers. Filters include search, segment, owner, churn pathway, severity, renewal window, freshness, and approval state. A compact coverage board and saved-view strip expose Value, Experience, Product-fit, Price, Involuntary, Competitive, Lifecycle, and Silent churn.
+Use a full-width operational workspace with search, segment, owner, churn pathway, severity, renewal window, freshness, and approval-state filters. The saved-view strip exposes Value, Experience, Product-fit, Price, Involuntary, Competitive, Lifecycle, and Silent churn.
 
 Each risk probability is paired with confidence and a text severity. Row expansion reveals top contributors and the current recommendation. The primary action opens the account; secondary actions allow mock assignment or acknowledgement.
+
+The default graph view maps each account through its churn pathway to the leading cause hypothesis. Connector labels show risk and confidence; selecting a route opens a compact evidence inspector with the strongest supporting signal, contradiction, and safe response. A table toggle preserves dense comparison work.
 
 ### 5.3 Accounts
 
@@ -137,7 +139,7 @@ The profile column shows account name, segment, plan, MRR, renewal date, owner, 
 
 Five health cards display Adoption, Engagement, Experience, Financial, and Value scores from 0–100, direction, and evidence count. The risk chart defaults to cancellation but can switch among risk types.
 
-The dark cause panel contains ranked hypotheses with confidence bars. Selecting a hypothesis reveals two clearly separated lists: **Supporting evidence** and **Contradictory evidence**, each with source and timestamp. The action card shows the recommendation, expected benefit, customer friction, approval requirement, eligible alternatives, and rejected actions with reasons.
+The light cause case file contains ranked hypotheses with confidence values on a warm-neutral paper surface. Selecting a hypothesis reveals two ruled columns: **Supporting evidence** and **Contradictory evidence**, each with source and timestamp. The action card shows the recommendation, expected benefit, customer friction, approval requirement, eligible alternatives, and rejected actions with reasons.
 
 The event timeline combines usage, billing, support, feedback, decisions, interventions, and outcomes. Event types use icons and labels, not color alone.
 

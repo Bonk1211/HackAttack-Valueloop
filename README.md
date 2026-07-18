@@ -6,7 +6,7 @@ ValueLoop is an explainable subscription-value intelligence and next-best-action
 
 ## Project Status
 
-The full frontend is implemented in `apps/web/` using deterministic local fixtures and deployed on Vercel. It covers Value, Experience, Product-fit, Price, Involuntary, Competitive, Lifecycle, and Silent churn from risk evidence through governed action and outcome. Backend services, persistence, authentication, and production intelligence remain planned work.
+The full frontend is implemented in `apps/web/` using deterministic local fixtures and deployed on Vercel. It covers Value, Experience, Product-fit, Price, Involuntary, Competitive, Lifecycle, and Silent churn from risk evidence through governed action and outcome. The Risk Queue includes graph and table views; the graph maps each account to its pathway, leading issue, evidence, and safe response. Backend services, persistence, authentication, and production intelligence remain planned work.
 
 **Live frontend:** [web-livid-beta-ilnxxzodh3.vercel.app](https://web-livid-beta-ilnxxzodh3.vercel.app)
 
