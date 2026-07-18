@@ -78,3 +78,17 @@ test("the Risk Queue offers an evidence-linked graph view", async () => {
   assert.match(styles, /\.issue-map-layout/);
   assert.match(styles, /\.cause-panel \{ background:#f3f2eb/);
 });
+
+test("motion stays accessible and fixture-safe", async () => {
+  const [source, styles, manifest] = await Promise.all([
+    readFile(new URL("components/value-loop-app.tsx", root), "utf8"),
+    readFile(new URL("app/globals.css", root), "utf8"),
+    readFile(new URL("package.json", root), "utf8"),
+  ]);
+  assert.match(manifest, /"motion":/);
+  assert.match(source, /from "motion\/react"/);
+  assert.match(source, /useReducedMotion\(\)/);
+  assert.match(source, /AnimatePresence/);
+  assert.doesNotMatch(source, /addEventListener\(["']scroll/);
+  assert.match(styles, /@media \(prefers-reduced-motion:reduce\)/);
+});

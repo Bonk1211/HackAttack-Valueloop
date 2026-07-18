@@ -173,7 +173,9 @@ Mock interactions should support navigation, account selection, filters, chart t
 - Full keyboard navigation, visible focus rings, semantic landmarks, labels, and table headers.
 - Minimum 4.5:1 body-text contrast and 44 px touch targets for primary controls.
 - Charts require text summaries; risk and health states require text/icon reinforcement.
-- Motion is restrained to 150–220 ms fades, panel transitions, and chart reveals; honor reduced-motion preferences.
+- Use Motion for spring-based page-header entrances, staggered KPI/section reveals, and explicit state changes such as graph selection, evidence switching, and approval decisions.
+- Animate only opacity and transforms; avoid parallax, cursor followers, continuous ambient motion, and layout-shifting effects in this operational dashboard.
+- Keep transitions around 150–220 ms and honor reduced-motion preferences by removing spatial movement and smooth scrolling.
 
 ## 9. Review Checklist
 
