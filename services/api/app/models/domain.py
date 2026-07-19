@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from typing import Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 class Account(BaseModel):
     id: str
@@ -81,6 +81,7 @@ class HealthScore(BaseModel):
     version: str = "1.0"
 
 class RiskPrediction(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     account_id: str
     risk_type: str  # cancellation | downgrade | inactivity | payment_failure | expansion_readiness
     probability: float = Field(ge=0, le=1)
