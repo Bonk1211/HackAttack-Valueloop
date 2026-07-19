@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
@@ -10,6 +10,7 @@ import {
   Clock as Clock3, Database, FileText as FileClock, Funnel as Filter, Gauge,
   SquaresFour as LayoutDashboard, Lifebuoy as LifeBuoy, List as Menu,
   DotsThree as MoreHorizontal, MagnifyingGlass as Search, ShieldCheck,
+  HandPointing, MapTrifold, PlayCircle, SlidersHorizontal, Sparkle,
   Target, ThumbsUp, TrendDown as TrendingDown, TrendUp as TrendingUp,
   UserCircleCheck as UserRoundCheck, Users,
   X, XCircle,
@@ -20,11 +21,14 @@ import {
 } from "recharts";
 import { accounts, actionMix, churnProfiles, getChurnProfile, outcomeTrend, portfolioTrend, sourceFreshness, type Account, type Severity } from "@/lib/mock-data";
 
-export type Screen = "overview" | "risk" | "accounts" | "account" | "approvals" | "outcomes" | "audit";
+export type Screen = "overview" | "risk" | "accounts" | "account" | "approvals" | "outcomes" | "audit" | "guide" | "playbooks";
 
 const nav = [
   ["overview", "Overview", LayoutDashboard], ["risk", "Risk Queue", Gauge], ["accounts", "Accounts", Users],
   ["approvals", "Approvals", BookOpenCheck], ["outcomes", "Outcomes", Target], ["audit", "Audit Log", FileClock],
+] as const;
+const exploreNav = [
+  ["guide", "Guided demo", MapTrifold], ["playbooks", "Playbook Studio", SlidersHorizontal],
 ] as const;
 const routes: Record<Screen, string> = {
   overview: "/",
@@ -34,15 +38,19 @@ const routes: Record<Screen, string> = {
   approvals: "/approvals",
   outcomes: "/outcomes",
   audit: "/audit",
+  guide: "/guided-demo",
+  playbooks: "/playbooks",
 };
 const headings: Record<Screen, [string, string, string]> = {
-  overview: ["Portfolio intelligence", "Good afternoon, Aisha", "Eight churn pathways need attention. Start with the clearest value-loss signals."],
+  overview: ["Portfolio intelligence", "Catch value loss before it becomes churn", "Turn scattered customer signals into an explainable, policy-safe recovery workflow."],
   risk: ["Detect", "Risk Queue", "Prioritize accounts by urgency, revenue exposure, and evidence confidence."],
   accounts: ["Customer 360", "Accounts", "Find every customer, subscription, health profile, and latest intervention."],
   account: ["Account / Northstar Labs", "Customer 360", "Unified value, risk, evidence, decisions, and activity for one account."],
   approvals: ["Approve", "Approval Inbox", "Review sensitive actions with complete account and policy context."],
   outcomes: ["Measure", "Outcomes", "Track observed results without implying causal uplift."],
   audit: ["Governance", "Audit Log", "Trace every recommendation, override, approval, and state change."],
+  guide: ["Judge walkthrough", "See the full value recovery loop", "Follow one customer from fragmented signals to a measured, human-approved outcome."],
+  playbooks: ["No-code configuration", "Playbook Studio", "Adapt signals, decision rules, approvals, and outcomes in plain business language."],
 };
 
 const churnTabs = ["All", "Urgent", "Value", "Experience", "Product-fit", "Price", "Involuntary", "Competitive", "Lifecycle", "Silent"];
@@ -50,6 +58,20 @@ const riskDays = ["12 Jul", "13 Jul", "14 Jul", "15 Jul", "16 Jul", "17 Jul", "1
 const getAccount = (accountId: string) => accounts.find((account) => account.id === accountId) ?? accounts[0];
 const timelineIcons = { critical: AlertCircle, warning: TrendingDown, positive: CheckCircle2, blue: Activity } as const;
 const spring = { type: "spring" as const, stiffness: 260, damping: 28, mass: 0.8 };
+
+type TourStep = { selector: string; title: string; detail: string };
+const commonTourStart: TourStep = { selector: ".page-head", title: "Start with the page question", detail: "This heading tells you the decision this screen helps you make. You do not need to understand the underlying models to use the workflow." };
+const tourSteps: Record<Screen, TourStep[]> = {
+  overview: [commonTourStart, { selector: ".problem-bridge", title: "See the whole solution first", detail: "This connects the fragmented-data problem to ValueLoop's six governed decisions." }, { selector: ".kpi-grid", title: "Scan portfolio urgency", detail: "These indicators show revenue exposure, urgent accounts, action acceptance, and data freshness." }, { selector: ".overview-grid .table-card", title: "Choose the account that needs attention", detail: "Accounts are prioritized by risk, value exposure, renewal timing, and evidence—not by one hidden score." }, { selector: ".overview-grid .insight", title: "Read the evidence pass", detail: "The selected account shows risk, likely hypotheses, direct evidence, a safe response, and a rejected alternative." }],
+  risk: [commonTourStart, { selector: ".queue-tools", title: "Narrow the queue", detail: "Use pathway tabs, search, and the graph/table switch to match the way your team investigates risk." }, { selector: ".issue-map", title: "Follow the risk route", detail: "Each row connects an account to its churn pathway and leading issue so the reasoning stays visible." }, { selector: ".map-inspector", title: "Inspect before opening the account", detail: "The inspector summarizes the strongest signal, contradiction, and policy-safe response." }],
+  accounts: [commonTourStart, { selector: ".mini-kpis", title: "Understand portfolio coverage", detail: "These figures summarize managed accounts, recurring revenue, profile completeness, and source freshness." }, { selector: ".queue-tools", title: "Find the right customer", detail: "Search by account or use segment and health views without entering a technical query." }, { selector: ".data-table", title: "Compare accounts consistently", detail: "Every row uses the same health, renewal, pathway, and next-action fields." }],
+  account: [commonTourStart, { selector: ".profile-side", title: "Confirm who and what the data represents", detail: "The profile keeps plan, value, owner, contact permission, and source freshness next to the analysis." }, { selector: ".risk-chart-card", title: "Detect what changed", detail: "Risk types stay separate and the summary explains the movement in plain language." }, { selector: ".health-grid", title: "Look beyond one score", detail: "Adoption, engagement, experience, financial, and value health reveal which part of the relationship weakened." }, { selector: ".cause-panel", title: "Challenge the explanation", detail: "Choose a hypothesis and compare supporting evidence with contradictory evidence. These are hypotheses, never verified causes." }, { selector: ".action-card", title: "See why an action is safe", detail: "The recommendation includes benefit, friction, policy checks, approval needs, and rejected actions with reasons." }, { selector: ".timeline", title: "Reconstruct the customer story", detail: "Usage, billing, support, feedback, decisions, and outcomes share one timestamped history." }],
+  approvals: [commonTourStart, { selector: ".approval-list", title: "Work through governed requests", detail: "Sensitive recommendations wait here for a named human reviewer." }, { selector: ".approval-detail", title: "Review the complete decision context", detail: "The reviewer sees customer context, freshness, policy checks, and a deterministic explanation before deciding." }, { selector: ".approval-actions", title: "Keep the final choice human", detail: "Approve, modify, or reject. Changes require an accountable decision rather than silent automation." }],
+  outcomes: [commonTourStart, { selector: ".kpi-grid", title: "Measure the workflow", detail: "Acceptance, overrides, time to action, and observed health movement show whether the operating process works." }, { selector: ".chart-grid", title: "Separate activity from proof", detail: "Charts and recovery summaries are labelled observed or simulated and do not claim causal uplift." }, { selector: ".queue-card", title: "Compare every pathway outcome", detail: "The table shows the final action, response, usage movement, health movement, and observation window." }],
+  audit: [commonTourStart, { selector: ".queue-tools", title: "Filter the history", detail: "Find decisions, approvals, data events, actors, or entities without reading raw system logs." }, { selector: ".data-table", title: "Trace every governed event", detail: "Each event keeps its actor, account, action, entity, time, and policy version." }, { selector: ".audit-diff", title: "See exactly what changed", detail: "The readable before-and-after record makes overrides and recommendations reviewable." }],
+  guide: [commonTourStart, { selector: ".guide-brief", title: "Connect the problem to the response", detail: "The walkthrough begins with the manual investigation problem, then shows the governed recovery loop." }, { selector: ".scenario-bar", title: "Try a different customer situation", detail: "Switch among all eight seeded churn pathways and the tutorial updates the complete story." }, { selector: ".walkthrough-nav", title: "Move through six decisions", detail: "Select Detect, Explain, Decide, Approve, Act, or Measure at any time." }, { selector: ".walkthrough-result", title: "See what ValueLoop and the user each do", detail: "Every step shows the system result, its honesty boundary, and the next human responsibility." }],
+  playbooks: [commonTourStart, { selector: ".studio-intro", title: "Configure in business language", detail: "Operators start with a customer situation instead of code, model parameters, or database rules." }, { selector: ".studio-form", title: "Build the playbook step by step", detail: "Choose a pathway, describe the intent, then set understandable confidence, frequency, approval, and customer-choice guardrails." }, { selector: ".playbook-preview", title: "Review the rule before testing", detail: "The live IF / THEN / ONLY WHEN preview exposes eligibility, approvals, rejected actions, and outcomes." }, { selector: ".customization-boundary", title: "Know what cannot be weakened", detail: "Evidence provenance, consent, policy checks, audit records, and real-world execution boundaries remain controlled." }],
+};
 
 function cx(...items: Array<string | false | undefined>) { return items.filter(Boolean).join(" "); }
 function RevealSection({ children, className, delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
@@ -64,6 +86,57 @@ function Badge({ severity, risk }: { severity: Severity; risk?: number }) { retu
 function SectionTitle({ eyebrow, title, detail, action }: { eyebrow: string; title: string; detail?: string; action?: React.ReactNode }) {
   const reduce = useReducedMotion();
   return <motion.div className="section-title" initial={reduce ? false : { opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.6 }} transition={reduce ? { duration: 0 } : { ...spring, stiffness: 300 }}><div><span>{eyebrow}</span><h2>{title}</h2>{detail && <p>{detail}</p>}</div>{action}</motion.div>;
+}
+
+function PageTour({ screen, onClose }: { screen: Screen; onClose: () => void }) {
+  const [index, setIndex] = useState(0);
+  const [box, setBox] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
+  const reduce = useReducedMotion();
+  const steps = tourSteps[screen];
+  const step = steps[index];
+
+  useEffect(() => {
+    let frame = 0;
+    const measure = () => {
+      const target = document.querySelector<HTMLElement>(step.selector);
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
+      if (!target) { setBox(null); return; }
+      const rect = target.getBoundingClientRect();
+      const top = Math.max(8, rect.top - 7);
+      const left = Math.max(8, rect.left - 7);
+      setBox({ top, left, width: Math.min(window.innerWidth - left - 8, rect.width + 14), height: Math.min(window.innerHeight - top - 8, rect.height + 14) });
+    };
+    const target = document.querySelector<HTMLElement>(step.selector);
+    target?.scrollIntoView({ block: "center", behavior: "auto" });
+    frame = window.requestAnimationFrame(measure);
+    window.addEventListener("resize", measure);
+    return () => { window.cancelAnimationFrame(frame); window.removeEventListener("resize", measure); };
+  }, [step.selector, reduce]);
+
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+      if (event.key === "ArrowRight") setIndex((current) => Math.min(steps.length - 1, current + 1));
+      if (event.key === "ArrowLeft") setIndex((current) => Math.max(0, current - 1));
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onClose, steps.length]);
+
+  const cardWidth = Math.min(370, Math.max(280, viewport.width - 32));
+  const cardHeight = 230;
+  const cardLeft = box ? Math.max(16, Math.min(box.left, viewport.width - cardWidth - 16)) : Math.max(16, (viewport.width - cardWidth) / 2);
+  const fitsBelow = box ? box.top + box.height + cardHeight + 32 < viewport.height : true;
+  const cardTop = box ? fitsBelow ? box.top + box.height + 18 : Math.max(16, box.top - cardHeight - 18) : Math.max(16, (viewport.height - cardHeight) / 2);
+
+  return <div className="tour-root" role="dialog" aria-modal="true" aria-labelledby="tour-title" aria-describedby="tour-detail">
+    <button className="tour-click-shield" aria-label="Close page tutorial" onClick={onClose} />
+    {box && <><motion.div className="tour-focus" initial={reduce ? false : { opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={reduce ? { duration: 0 } : spring} style={box} /><motion.span className="tour-pointer" initial={reduce ? false : { opacity: 0, scale: 0.7 }} animate={{ opacity: 1, scale: 1 }} style={{ top: Math.max(10, box.top - 14), left: Math.max(10, box.left - 14) }}><HandPointing /></motion.span></>}
+    <motion.article key={`${screen}-${index}`} className="tour-card" initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : spring} style={{ width: cardWidth, top: cardTop, left: cardLeft }}>
+      <header><span>Page tutorial · {index + 1} of {steps.length}</span><button aria-label="Close tutorial" onClick={onClose}><X /></button></header><h2 id="tour-title">{step.title}</h2><p id="tour-detail">{step.detail}</p><div className="tour-progress" aria-label={`Tutorial progress: step ${index + 1} of ${steps.length}`}>{steps.map((item, stepIndex) => <i className={stepIndex === index ? "active" : stepIndex < index ? "complete" : ""} key={item.title} />)}</div><footer><button className="text-btn" onClick={onClose}>Skip tutorial</button><div><button className="secondary" disabled={index === 0} onClick={() => setIndex(index - 1)}>Back</button><button className="primary" autoFocus onClick={() => index === steps.length - 1 ? onClose() : setIndex(index + 1)}>{index === steps.length - 1 ? "Finish" : "Next"}<ArrowRight /></button></div></footer>
+    </motion.article>
+  </div>;
 }
 function Kpi({ label, value, delta, note, icon: Icon, tone, index = 0 }: { label: string; value: string; delta: number; note: string; icon: typeof Activity; tone: string; index?: number }) {
   const reduce = useReducedMotion();
@@ -90,11 +163,15 @@ function ChurnIssueMap({ rows, openAccount }: { rows: Account[]; openAccount: (a
   </section>;
 }
 
-function Overview({ openAccount, openRisk }: { openAccount: (accountId: string) => void; openRisk: () => void }) {
+function Overview({ openAccount, openRisk, openGuide, openPlaybooks }: { openAccount: (accountId: string) => void; openRisk: () => void; openGuide: () => void; openPlaybooks: () => void }) {
   const [selected, setSelected] = useState(accounts[0]);
   const reduce = useReducedMotion();
   const selectedProfile = getChurnProfile(selected.id) ?? churnProfiles[0];
   return <>
+    <RevealSection className="problem-bridge">
+      <div className="problem-copy"><span>Why ValueLoop exists</span><h2>One customer problem. Six connected decisions.</h2><p>CSMs should not have to compare product analytics, billing, support, and CRM notes by hand. ValueLoop assembles the evidence, explains uncertainty, filters unsafe actions, keeps a human in control, and records what happened next.</p><div><motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} className="primary" onClick={openGuide}><PlayCircle />Start the 3-minute walkthrough</motion.button><button className="text-btn" onClick={openPlaybooks}>See how teams customize it <ArrowRight /></button></div></div>
+      <div className="loop-strip" aria-label="ValueLoop governed workflow">{["Detect", "Explain", "Decide", "Approve", "Act", "Measure"].map((step, index) => <div key={step}><span>{String(index + 1).padStart(2, "0")}</span><strong>{step}</strong><small>{["Unify warning signs", "Show evidence", "Choose safely", "Keep control", "Log the response", "Observe change"][index]}</small>{index < 5 && <ArrowRight />}</div>)}</div>
+    </RevealSection>
     <section className="kpi-grid">
       <Kpi index={0} label="At-risk MRR" value="RM 48.0k" delta={12.4} note="Across eight churn pathways" icon={CircleDollarSign} tone="blue" />
       <Kpi index={1} label="High-risk accounts" value="8" delta={3} note="Seven require governed review" icon={AlertCircle} tone="amber" />
@@ -115,6 +192,78 @@ function Overview({ openAccount, openRisk }: { openAccount: (accountId: string) 
       <article className="card chart-card wide"><SectionTitle eyebrow="Portfolio movement" title="At-risk MRR trend" detail="RM 48.0k is currently exposed across the eight seeded pathways." action={<button className="period">Last 6 months <ChevronDown /></button>} /><div className="chart"><ResponsiveContainer><AreaChart data={portfolioTrend} margin={{ top: 10, right: 8, left: -20 }}><CartesianGrid vertical={false} stroke="#e8e8e3" /><XAxis dataKey="month" axisLine={false} tickLine={false} /><YAxis axisLine={false} tickLine={false} tickFormatter={v => `${v}k`} /><Tooltip /><Area dataKey="mrr" name="At-risk MRR (RM k)" stroke="#33483f" strokeWidth={2.5} fill="#e8eee9" /></AreaChart></ResponsiveContainer></div></article>
       <article className="card chart-card"><SectionTitle eyebrow="Recommendations" title="Action mix" detail="Safe, eligible actions this month." /><div className="donut"><div className="donut-chart"><ResponsiveContainer><PieChart><Pie data={actionMix} dataKey="value" innerRadius={46} outerRadius={70} paddingAngle={3}>{actionMix.map(x => <Cell key={x.name} fill={x.fill} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><span><strong>50</strong><small>actions</small></span></div><div className="legend">{actionMix.map(x => <div key={x.name}><i style={{ background: x.fill }} /><span>{x.name}</span><strong>{x.value}%</strong></div>)}</div></div></article>
     </RevealSection>
+  </>;
+}
+
+const walkthroughSteps = [
+  ["Detect", "Find the change", "Combine customer signals before the risk is obvious."],
+  ["Explain", "Build an evidence file", "Rank hypotheses and show what argues against each one."],
+  ["Decide", "Filter the choices", "Reject actions that do not fit the evidence or customer state."],
+  ["Approve", "Keep a human in control", "Route sensitive actions to the right owner with full context."],
+  ["Act", "Record the response", "Simulate or log the action without hidden automation."],
+  ["Measure", "Observe what changed", "Track later movement without claiming unproven causality."],
+] as const;
+
+function GuidedDemo({ openAccount, openApprovals, openOutcomes, openPlaybooks }: { openAccount: (accountId: string) => void; openApprovals: () => void; openOutcomes: () => void; openPlaybooks: () => void }) {
+  const [step, setStep] = useState(0);
+  const [accountId, setAccountId] = useState("northstar");
+  const reduce = useReducedMotion();
+  const account = getAccount(accountId);
+  const profile = getChurnProfile(account.id) ?? churnProfiles[0];
+  const cause = profile.causes[0];
+  const outcome = profile.outcome;
+  const stepContent = [
+    { label: "What ValueLoop found", value: `${profile.probability}% ${profile.riskLabel.toLowerCase()} risk`, note: profile.summary, user: "Review the changed signals and their freshness instead of opening four separate tools.", detail: <div className="demo-signal-grid">{cause.supporting.slice(0, 3).map((item) => <div key={item.text}><span>{item.source}</span><strong>{item.text}</strong><small>{item.timestamp}</small></div>)}</div> },
+    { label: "Leading hypothesis", value: `${cause.label} · ${cause.confidence.toFixed(2)} confidence`, note: "This is a transparent hypothesis, not a verified cause.", user: "Compare supporting and contradictory evidence, then challenge the explanation if it does not fit.", detail: <div className="demo-evidence"><div><CheckCircle2 /><span><small>Supports</small><strong>{cause.supporting[0].text}</strong></span></div><div><XCircle /><span><small>Challenges</small><strong>{cause.contradicting[0]?.text ?? "No contradiction recorded"}</strong></span></div></div> },
+    { label: "Safest useful response", value: profile.action.recommended, note: profile.action.explanation, user: "See why this action ranked first and why tempting alternatives were blocked.", detail: <div className="demo-policy"><span><Check /><strong>Eligible</strong>{profile.action.checks[0]}</span>{profile.action.rejected.slice(0, 2).map((item) => <span key={item.name}><X /><strong>{item.name} blocked</strong>{item.reason}</span>)}</div> },
+    { label: profile.action.approvalRequired ? "Human review required" : "Within automatic demo guardrails", value: profile.action.approvalRequired ? `${account.owner} reviews the action` : "Eligible to start as a mock action", note: profile.action.approvalReason, user: "Approve, modify, or reject with a reason. The recommendation never bypasses policy.", detail: <div className="demo-checklist">{profile.action.checks.map((check) => <span key={check}><ShieldCheck />{check}</span>)}</div> },
+    { label: "Intervention record", value: `${profile.action.recommended} · simulated`, note: "The prototype records the selected response, owner, decision version, and status. It does not contact a real customer.", user: "Confirm the final response and preserve customer-friendly choices such as pause, downgrade, or no action.", detail: <div className="demo-receipt"><code>INT-{2841 + churnProfiles.indexOf(profile)}</code><span><small>Owner</small><strong>{account.owner}</strong></span><span><small>Policy</small><strong>policy-v2.4</strong></span><span><small>Status</small><strong>Mock logged</strong></span></div> },
+    { label: "Observed follow-up", value: `${outcome.healthDelta} health movement`, note: `${outcome.response}. ${outcome.observation}.`, user: "Review observed changes and decide whether to continue, adapt, or stop the playbook.", detail: <div className="demo-outcome"><span><small>Usage change</small><strong>{outcome.usageDelta}</strong></span><span><small>Customer response</small><strong>{outcome.response}</strong></span><span><small>Claim boundary</small><strong>Observed / simulated, not causal</strong></span></div> },
+  ][step];
+
+  const nextAction = () => {
+    if (step < walkthroughSteps.length - 1) setStep(step + 1);
+    else openOutcomes();
+  };
+
+  return <>
+    <section className="guide-brief"><div><span>Problem</span><h2>Warning signs live in different systems.</h2><p>Usage falls in product analytics, severe tickets sit in support, and billing still looks healthy. A non-technical CSM has to connect that pattern manually.</p></div><ArrowRight /><div><span>ValueLoop response</span><h2>One explainable recovery path.</h2><p>The same evidence flows through risk, cause, policy, approval, intervention, and outcome records—without handing control to a black box.</p></div></section>
+    <section className="scenario-bar"><label htmlFor="demo-scenario"><span>Try another seeded situation</span><select id="demo-scenario" value={accountId} onChange={(event) => { setAccountId(event.target.value); setStep(0); }}>{churnProfiles.map((item) => <option value={item.accountId} key={item.accountId}>{getAccount(item.accountId).name} · {item.churnType}</option>)}</select></label><p><Badge severity={account.severity} risk={profile.probability} /> {account.mrr} MRR · renews {account.renewal}</p></section>
+    <section className="walkthrough-shell">
+      <nav className="walkthrough-nav" aria-label="Guided demo steps">{walkthroughSteps.map(([name, title], index) => <button key={name} className={index === step ? "active" : index < step ? "complete" : ""} aria-current={index === step ? "step" : undefined} onClick={() => setStep(index)}><span>{index < step ? <Check /> : String(index + 1).padStart(2, "0")}</span><div><small>{name}</small><strong>{title}</strong></div></button>)}</nav>
+      <AnimatePresence mode="wait" initial={false}><motion.article key={`${accountId}-${step}`} className="walkthrough-panel" initial={reduce ? false : { opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={reduce ? undefined : { opacity: 0, x: -10 }} transition={reduce ? { duration: 0 } : spring}>
+        <header><span>Step {step + 1} of 6 · {walkthroughSteps[step][0]}</span><h2>{walkthroughSteps[step][1]}</h2><p>{walkthroughSteps[step][2]}</p></header>
+        <div className="walkthrough-result"><small>{stepContent.label}</small><strong>{stepContent.value}</strong><p>{stepContent.note}</p>{stepContent.detail}</div>
+        <aside><HandPointing /><div><small>What the user does</small><p>{stepContent.user}</p></div></aside>
+        <footer><button className="secondary" onClick={() => step === 0 ? openAccount(account.id) : step === 3 ? openApprovals() : openPlaybooks()}>{step === 0 ? "Open full evidence file" : step === 3 ? "Open approval inbox" : "Customize this logic"}<ArrowRight /></button><div><button className="text-btn" disabled={step === 0} onClick={() => setStep(Math.max(0, step - 1))}>Previous</button><motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} className="primary" onClick={nextAction}>{step === 5 ? "View all outcomes" : "Next step"}<ArrowRight /></motion.button></div></footer>
+      </motion.article></AnimatePresence>
+    </section>
+    <p className="prototype-note"><ShieldCheck />Fixture-only demonstration: signals, recommendations, approvals, and outcomes are deterministic mock data. No customer is contacted and no plan or payment is changed.</p>
+  </>;
+}
+
+function PlaybookStudio({ openGuide }: { openGuide: () => void }) {
+  const [presetId, setPresetId] = useState("northstar");
+  const [confidence, setConfidence] = useState(65);
+  const [frequency, setFrequency] = useState(1);
+  const [approval, setApproval] = useState("CSM owner");
+  const [customerChoice, setCustomerChoice] = useState(true);
+  const [drafted, setDrafted] = useState(false);
+  const [tested, setTested] = useState(false);
+  const profile = getChurnProfile(presetId) ?? churnProfiles[0];
+  const account = getAccount(profile.accountId);
+  const prompt = `When ${profile.churnType.toLowerCase()} signals are strong, recommend ${profile.action.recommended.toLowerCase()}, keep outreach respectful, and require ${approval.toLowerCase()} review.`;
+  return <>
+    <section className="studio-intro"><div><span><Sparkle />Designed for operators, not data scientists</span><h2>Describe the customer situation. ValueLoop turns it into a reviewable playbook.</h2><p>Teams start from a plain-language template, adjust a few business controls, and preview exactly which evidence, actions, approvals, and outcomes the workflow will use.</p></div><button className="secondary" onClick={openGuide}><PlayCircle />See it run first</button></section>
+    <section className="studio-layout">
+      <div className="studio-form">
+        <article className="studio-section"><header><span>01</span><div><h3>Choose a situation</h3><p>Start from one of the eight explainable churn pathways.</p></div></header><label><span>Playbook template</span><select value={presetId} onChange={(event) => { setPresetId(event.target.value); setTested(false); }}>{churnProfiles.map((item) => <option value={item.accountId} key={item.accountId}>{item.churnType} · {item.action.recommended}</option>)}</select></label></article>
+        <article className="studio-section"><header><span>02</span><div><h3>Say what you want in plain language</h3><p>The text becomes a draft only. Structured policy controls remain authoritative.</p></div></header><label><span>Business instruction</span><textarea defaultValue={prompt} key={prompt} rows={4} /></label><button className="text-btn" onClick={() => setDrafted(true)}><Sparkle />Generate reviewable draft</button>{drafted && <p className="inline-success"><CheckCircle2 />Draft updated locally. Review the controls below before testing.</p>}</article>
+        <article className="studio-section"><header><span>03</span><div><h3>Set the guardrails</h3><p>Use business terms; technical versions and audit fields are added automatically.</p></div></header><div className="control-grid"><label><span>Minimum evidence confidence <strong>{confidence}%</strong></span><input type="range" min="45" max="90" value={confidence} onChange={(event) => setConfidence(Number(event.target.value))} /></label><label><span>Maximum customer outreach</span><select value={frequency} onChange={(event) => setFrequency(Number(event.target.value))}><option value={0}>No automatic outreach</option><option value={1}>Once every 14 days</option><option value={2}>Twice every 30 days</option></select></label><label><span>Who approves sensitive actions?</span><select value={approval} onChange={(event) => setApproval(event.target.value)}><option>CSM owner</option><option>CS manager</option><option>Finance reviewer</option><option>Support lead</option></select></label><label className="check-control"><input type="checkbox" checked={customerChoice} onChange={(event) => setCustomerChoice(event.target.checked)} /><span><strong>Keep customer-choice paths visible</strong>Show pause, downgrade, cancellation, and no-action where eligible.</span></label></div></article>
+      </div>
+      <aside className="playbook-preview"><header><span>Live playbook preview</span><strong>{profile.churnType}</strong><small>Draft · fixture only · policy-v2.4</small></header><div className="preview-flow"><div><span>IF</span><p>{profile.causes[0].supporting[0].text}</p><small>and evidence confidence is at least {confidence}%</small></div><ArrowDownRight /><div><span>THEN CONSIDER</span><p>{profile.action.recommended}</p><small>{profile.action.description}</small></div><ArrowDownRight /><div><span>ONLY WHEN</span>{profile.action.checks.map((check) => <small key={check}><Check />{check}</small>)}</div></div><dl><div><dt>Approval owner</dt><dd>{approval}</dd></div><div><dt>Frequency cap</dt><dd>{frequency === 0 ? "No automatic outreach" : frequency === 1 ? "1 / 14 days" : "2 / 30 days"}</dd></div><div><dt>Customer choice</dt><dd>{customerChoice ? "Required" : "Needs policy review"}</dd></div><div><dt>Outcome to observe</dt><dd>Usage, health, response, renewal</dd></div></dl><div className="preview-rejected"><small>Automatically blocked examples</small>{profile.action.rejected.map((item) => <p key={item.name}><X />{item.name}: {item.reason}</p>)}</div><motion.button className="primary full" onClick={() => setTested(true)}><PlayCircle />Test with {account.name}</motion.button>{tested && <div className="test-result"><CheckCircle2 /><span><strong>Test passed through the full loop</strong><small>{profile.probability}% risk · {profile.action.recommended} · {profile.action.approvalRequired ? "approval routed" : "eligible mock action"}</small></span></div>}</aside>
+    </section>
+    <section className="customization-boundary"><ShieldCheck /><div><strong>What teams can safely customize</strong><p>Thresholds, source mappings, segment rules, action eligibility, approval roles, frequency caps, templates, and observed outcome windows.</p></div><div><strong>What never becomes free-form</strong><p>Evidence provenance, policy checks, customer consent, audit records, rejected-action reasons, and the boundary against autonomous real-world execution.</p></div></section>
   </>;
 }
 
@@ -172,13 +321,13 @@ function Audit() {
 }
 
 export function ValueLoopApp({ initialScreen, initialAccountId = "northstar" }: { initialScreen: Screen; initialAccountId?: string }) {
-  const router = useRouter(); const screen = initialScreen; const [mobile, setMobile] = useState(false); const [fresh, setFresh] = useState(false);
+  const router = useRouter(); const screen = initialScreen; const [mobile, setMobile] = useState(false); const [fresh, setFresh] = useState(false); const [tour, setTour] = useState(false);
   const reduce = useReducedMotion();
   const activeAccount = getAccount(initialAccountId); const activeProfile = getChurnProfile(activeAccount.id);
   const select = (s: Screen, accountId?: string) => { router.push(s === "account" ? `/accounts/${accountId ?? activeAccount.id}` : routes[s]); setMobile(false); window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" }); };
   const h: [string, string, string] = screen === "account" ? [`Account / ${activeAccount.name}`, "Customer 360", `${activeProfile?.churnType ?? "Account"}: unified value, risk, evidence, decisions, and activity.`] : headings[screen];
   const activeNav = (id: Screen) => screen === id || screen === "account" && id === "accounts";
-  return <div className="shell"><a className="skip-link" href="#main-content">Skip to main content</a><aside className={cx("sidebar", mobile && "open")}><div className="brand"><motion.span initial={reduce ? false : { opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={reduce ? { duration: 0 } : spring}><Activity /></motion.span><div><strong>ValueLoop</strong><small>Customer intelligence</small></div><button aria-label="Close navigation" onClick={() => setMobile(false)}><X /></button></div><nav aria-label="Primary navigation"><small>Workspace</small>{nav.map(([id, label, Icon], index) => <motion.button initial={reduce ? false : { opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: index * 0.035 }} whileHover={reduce ? undefined : { x: 2 }} whileTap={reduce ? undefined : { scale: 0.985 }} key={id} aria-current={activeNav(id) ? "page" : undefined} className={activeNav(id) ? "active" : ""} onClick={() => select(id)}><Icon /><span>{label}</span>{id === "approvals" && <b>{churnProfiles.filter((profile) => profile.action.approvalRequired).length}</b>}</motion.button>)}</nav><div className="sidebar-foot"><motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.99 }} className="fresh-card" onClick={() => setFresh(!fresh)}><span><Database /></span><div><strong>Sources healthy</strong><small>Updated 8 min ago</small></div><ChevronRight /></motion.button><AnimatePresence>{fresh && <motion.div initial={reduce ? false : { opacity: 0, y: 6, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={reduce ? undefined : { opacity: 0, y: 4, scale: 0.98 }} transition={reduce ? { duration: 0 } : spring} className="fresh-pop"><strong>Demo data is current</strong><p>All four sources passed validation.</p><button onClick={() => setFresh(false)}>Run mock refresh</button></motion.div>}</AnimatePresence><div className="user"><span>AR</span><div><strong>Aisha Rahman</strong><small>Customer Success Manager</small></div><MoreHorizontal aria-hidden="true" /></div></div></aside><AnimatePresence>{mobile && <motion.button initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={reduce ? undefined : { opacity: 0 }} className="scrim" onClick={() => setMobile(false)} aria-label="Close navigation" />}</AnimatePresence>
-  <main id="main-content"><motion.header initial={reduce ? false : { opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : spring} className="topbar"><motion.button whileTap={reduce ? undefined : { scale: 0.94 }} aria-label="Open navigation" className="menu" onClick={() => setMobile(true)}><Menu /></motion.button><div className="crumb"><LayoutDashboard /><span>Workspace</span><ChevronRight /><strong>{screen === "account" ? activeAccount.name : h[1]}</strong></div><div className="top-actions"><label><span className="sr-only">Search accounts</span><Search /><input aria-label="Search accounts" placeholder="Search accounts..." /><kbd>⌘ K</kbd></label><motion.button whileTap={reduce ? undefined : { scale: 0.92 }} aria-label="View notifications" className="icon-btn notify"><Bell /><i /></motion.button><button aria-label="Change reporting date" className="period">18 Jul 2026 <ChevronDown /></button></div></motion.header><div className="page"><motion.header initial={reduce ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: 0.04 }} className="page-head"><div><span>{h[0]}</span><h1>{h[1]}</h1><p>{h[2]}</p></div>{screen === "overview" && <motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} transition={spring} className="primary" onClick={() => select("risk")}><Gauge />Open risk queue</motion.button>}{screen === "risk" && <motion.button whileTap={reduce ? undefined : { scale: 0.98 }} className="secondary"><Database />Refresh analysis</motion.button>}{screen === "audit" && <motion.button whileTap={reduce ? undefined : { scale: 0.98 }} className="secondary"><ShieldCheck />Manager view</motion.button>}</motion.header>
-  <motion.div key={screen} initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : { duration: 0.22, delay: 0.08 }}>{screen === "overview" && <Overview openAccount={(accountId) => select("account", accountId)} openRisk={() => select("risk")} />}{screen === "risk" && <Queue openAccount={(accountId) => select("account", accountId)} />}{screen === "accounts" && <Queue openAccount={(accountId) => select("account", accountId)} directory />}{screen === "account" && <Customer360 accountId={activeAccount.id} back={() => select("accounts")} />}{screen === "approvals" && <Approvals />}{screen === "outcomes" && <Outcomes />}{screen === "audit" && <Audit />}</motion.div></div></main></div>;
+  return <div className="shell"><a className="skip-link" href="#main-content">Skip to main content</a><aside className={cx("sidebar", mobile && "open")}><div className="brand"><motion.span initial={reduce ? false : { opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={reduce ? { duration: 0 } : spring}><Activity /></motion.span><div><strong>ValueLoop</strong><small>Customer intelligence</small></div><button aria-label="Close navigation" onClick={() => setMobile(false)}><X /></button></div><nav aria-label="Primary navigation"><small>Workspace</small>{nav.map(([id, label, Icon], index) => <motion.button initial={reduce ? false : { opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: index * 0.035 }} whileHover={reduce ? undefined : { x: 2 }} whileTap={reduce ? undefined : { scale: 0.985 }} key={id} aria-current={activeNav(id) ? "page" : undefined} className={activeNav(id) ? "active" : ""} onClick={() => select(id)}><Icon /><span>{label}</span>{id === "approvals" && <b>{churnProfiles.filter((profile) => profile.action.approvalRequired).length}</b>}</motion.button>)}<small className="nav-section">Explore & configure</small>{exploreNav.map(([id, label, Icon], index) => <motion.button initial={reduce ? false : { opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: 0.18 + index * 0.035 }} whileHover={reduce ? undefined : { x: 2 }} whileTap={reduce ? undefined : { scale: 0.985 }} key={id} aria-current={activeNav(id) ? "page" : undefined} className={activeNav(id) ? "active" : ""} onClick={() => select(id)}><Icon /><span>{label}</span>{id === "guide" && <em>Start</em>}</motion.button>)}</nav><div className="sidebar-foot"><motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.99 }} className="fresh-card" onClick={() => setFresh(!fresh)}><span><Database /></span><div><strong>Sources healthy</strong><small>Updated 8 min ago</small></div><ChevronRight /></motion.button><AnimatePresence>{fresh && <motion.div initial={reduce ? false : { opacity: 0, y: 6, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={reduce ? undefined : { opacity: 0, y: 4, scale: 0.98 }} transition={reduce ? { duration: 0 } : spring} className="fresh-pop"><strong>Demo data is current</strong><p>All four sources passed validation.</p><button onClick={() => setFresh(false)}>Run mock refresh</button></motion.div>}</AnimatePresence><div className="user"><span>AR</span><div><strong>Aisha Rahman</strong><small>Customer Success Manager</small></div><MoreHorizontal aria-hidden="true" /></div></div></aside><AnimatePresence>{mobile && <motion.button initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={reduce ? undefined : { opacity: 0 }} className="scrim" onClick={() => setMobile(false)} aria-label="Close navigation" />}</AnimatePresence>
+  <main id="main-content"><motion.header initial={reduce ? false : { opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : spring} className="topbar"><motion.button whileTap={reduce ? undefined : { scale: 0.94 }} aria-label="Open navigation" className="menu" onClick={() => setMobile(true)}><Menu /></motion.button><div className="crumb"><LayoutDashboard /><span>Workspace</span><ChevronRight /><strong>{screen === "account" ? activeAccount.name : h[1]}</strong></div><div className="top-actions"><label><span className="sr-only">Search accounts</span><Search /><input aria-label="Search accounts" placeholder="Search accounts..." /><kbd>⌘ K</kbd></label><motion.button whileTap={reduce ? undefined : { scale: 0.92 }} aria-label="View notifications" className="icon-btn notify"><Bell /><i /></motion.button><button aria-label="Change reporting date" className="period">18 Jul 2026 <ChevronDown /></button></div></motion.header><div className="page"><motion.header initial={reduce ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: 0.04 }} className="page-head"><div><span>{h[0]}</span><h1>{h[1]}</h1><p>{h[2]}</p></div><div className="page-head-actions"><motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} className="secondary tutorial-launch" onClick={() => setTour(true)}><HandPointing />Page tutorial</motion.button>{screen === "overview" && <motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} transition={spring} className="primary" onClick={() => select("risk")}><Gauge />Open risk queue</motion.button>}{screen === "risk" && <motion.button whileTap={reduce ? undefined : { scale: 0.98 }} className="secondary"><Database />Refresh analysis</motion.button>}{screen === "audit" && <motion.button whileTap={reduce ? undefined : { scale: 0.98 }} className="secondary"><ShieldCheck />Manager view</motion.button>}</div></motion.header>
+  <motion.div key={screen} initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : { duration: 0.22, delay: 0.08 }}>{screen === "overview" && <Overview openAccount={(accountId) => select("account", accountId)} openRisk={() => select("risk")} openGuide={() => select("guide")} openPlaybooks={() => select("playbooks")} />}{screen === "risk" && <Queue openAccount={(accountId) => select("account", accountId)} />}{screen === "accounts" && <Queue openAccount={(accountId) => select("account", accountId)} directory />}{screen === "account" && <Customer360 accountId={activeAccount.id} back={() => select("accounts")} />}{screen === "approvals" && <Approvals />}{screen === "outcomes" && <Outcomes />}{screen === "audit" && <Audit />}{screen === "guide" && <GuidedDemo openAccount={(accountId) => select("account", accountId)} openApprovals={() => select("approvals")} openOutcomes={() => select("outcomes")} openPlaybooks={() => select("playbooks")} />}{screen === "playbooks" && <PlaybookStudio openGuide={() => select("guide")} />}</motion.div></div></main>{tour && <PageTour screen={screen} onClose={() => setTour(false)} />}</div>;
 }

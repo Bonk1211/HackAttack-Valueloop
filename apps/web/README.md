@@ -2,6 +2,8 @@
 
 Production-ready frontend mockup for the ValueLoop customer-value intelligence dashboard. All accounts, risks, evidence, approvals, and outcomes use deterministic local fixtures; no backend or authentication is required.
 
+Use the **Page tutorial** button on any screen for a contextual spotlight walkthrough of the visible controls and evidence panels.
+
 Live deployment: [web-livid-beta-ilnxxzodh3.vercel.app](https://web-livid-beta-ilnxxzodh3.vercel.app)
 
 ## Run locally
@@ -16,6 +18,8 @@ Open `http://localhost:3000`. Use `npm run build`, `npm test`, `npm run lint`, a
 ## Routes
 
 - `/` — portfolio overview
+- `/guided-demo` — non-technical Detect-to-Measure walkthrough
+- `/playbooks` — fixture-only no-code playbook customization
 - `/risk-queue` — prioritized risk queue
 - `/accounts` and `/accounts/northstar` — directory and Customer 360
 - `/approvals` — mock approval workflow

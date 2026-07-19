@@ -11,6 +11,8 @@ const routes = [
   ["app/approvals/page.tsx", "approvals"],
   ["app/outcomes/page.tsx", "outcomes"],
   ["app/audit/page.tsx", "audit"],
+  ["app/guided-demo/page.tsx", "guide"],
+  ["app/playbooks/page.tsx", "playbooks"],
 ];
 
 test("every product screen has a real App Router entry", async () => {
@@ -91,4 +93,40 @@ test("motion stays accessible and fixture-safe", async () => {
   assert.match(source, /AnimatePresence/);
   assert.doesNotMatch(source, /addEventListener\(["']scroll/);
   assert.match(styles, /@media \(prefers-reduced-motion:reduce\)/);
+});
+
+test("judges can follow the full governed loop without technical knowledge", async () => {
+  const source = await readFile(new URL("components/value-loop-app.tsx", root), "utf8");
+  for (const step of ["Detect", "Explain", "Decide", "Approve", "Act", "Measure"]) {
+    assert.match(source, new RegExp(`\\[\\"${step}\\"`));
+  }
+  assert.match(source, /What the user does/);
+  assert.match(source, /hypothesis, not a verified cause/);
+  assert.match(source, /No customer is contacted/);
+});
+
+test("the no-code studio exposes safe customization boundaries", async () => {
+  const source = await readFile(new URL("components/value-loop-app.tsx", root), "utf8");
+  assert.match(source, /Minimum evidence confidence/);
+  assert.match(source, /Maximum customer outreach/);
+  assert.match(source, /Who approves sensitive actions/);
+  assert.match(source, /Keep customer-choice paths visible/);
+  assert.match(source, /What never becomes free-form/);
+});
+
+test("every screen exposes a contextual spotlight tutorial", async () => {
+  const [source, styles] = await Promise.all([
+    readFile(new URL("components/value-loop-app.tsx", root), "utf8"),
+    readFile(new URL("app/globals.css", root), "utf8"),
+  ]);
+  assert.match(source, /const tourSteps: Record<Screen, TourStep\[]>/);
+  for (const screen of ["overview", "risk", "accounts", "account", "approvals", "outcomes", "audit", "guide", "playbooks"]) {
+    assert.match(source, new RegExp(`\\n  ${screen}: \\[commonTourStart`));
+  }
+  assert.match(source, /Page tutorial/);
+  assert.match(source, /scrollIntoView/);
+  assert.match(source, /ArrowRight/);
+  assert.match(source, /event.key === "Escape"/);
+  assert.match(styles, /\.tour-focus/);
+  assert.match(styles, /100vmax/);
 });

@@ -155,6 +155,39 @@ Top cards show recommendation acceptance, override rate, time to action, and obs
 
 Use a dense, filterable table with timestamp, actor, role, account, action, entity, version, and reason. Expanding a row shows a readable before/after comparison. Manager-only status is represented visually in the mockup, without implementing authentication.
 
+### 5.8 Guided demo
+
+The `/guided-demo` route is a non-technical narrative layer for judges, buyers, and first-time users. It must make the problem-to-solution mechanism explicit rather than expecting the viewer to infer it from dashboard widgets.
+
+- Begin with the fragmented-signals problem and the governed ValueLoop response.
+- Present Detect → Explain → Decide → Approve → Act → Measure as six selectable steps.
+- For each step, state what ValueLoop found, why it matters, what the user does, and which guardrail or honesty boundary applies.
+- Allow switching among the eight seeded churn pathways without leaving the walkthrough.
+- Link to the full Customer 360 evidence file, approval inbox, Playbook Studio, and outcomes.
+- Label every action and outcome as fixture-only, mock, simulated, or observed as appropriate.
+
+### 5.9 Playbook Studio
+
+The `/playbooks` route demonstrates how non-technical operators can customize ValueLoop without writing rules or model code. It remains a local mock interface and does not save configuration.
+
+- Start from one of the eight seeded churn-pathway templates.
+- Accept a plain-language business instruction as a draft aid only; structured policy controls remain authoritative.
+- Expose minimum evidence confidence, outreach frequency cap, approval owner, and customer-choice protections.
+- Show a live IF / THEN / ONLY WHEN preview, rejected actions, outcome fields, rule version, and fixture boundary.
+- Separate safely customizable settings from immutable governance requirements such as evidence provenance, consent, rejected-action reasons, audit records, and the ban on autonomous real-world execution.
+- Provide a deterministic test against the selected seeded account.
+
+### 5.10 Contextual page tutorials
+
+Every primary and exploratory screen includes an optional **Page tutorial** control. The tutorial is an in-context spotlight rather than a separate documentation modal.
+
+- Dim the rest of the interface and outline the actual panel being explained.
+- Scroll each target into view and place the explanation card above or below it according to available space.
+- Provide plain-language Back, Next, Finish, and Skip controls plus visible progress.
+- Support Escape to close and Left/Right arrow keys to move between steps.
+- Tailor the sequence to the current page; Customer 360, for example, must cover profile/freshness, risk, health, cause evidence, action policy, and timeline.
+- Keep the tutorial responsive and honor reduced-motion preferences.
+
 ## 6. Components
 
 Build the later frontend from reusable primitives: `AppShell`, `SidebarNav`, `PageHeader`, `KpiCard`, `StatusBadge`, `RiskChip`, `HealthCard`, `TrendChart`, `AccountTable`, `InsightPanel`, `HypothesisList`, `EvidenceList`, `ActionCard`, `ApprovalPanel`, `EventTimeline`, `AuditDiff`, `EmptyState`, and `SkeletonCard`.
