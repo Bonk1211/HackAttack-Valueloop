@@ -173,7 +173,7 @@ export const churnProfiles: ChurnProfile[] = [
     ],
     action: { recommended: "Differentiation review", description: "Compare confirmed requirements, product gaps, roadmap facts, and transparent contract options.", benefit: "Medium", friction: "Medium", risk: "Medium", approvalRequired: true, approvalReason: "Competitive positioning requires CSM and product-owner review.", explanation: "Cobalt is evaluating a named alternative because of a confirmed policy feature gap. Respond with verified differentiation and customer-friendly contract options.", checks: ["Competitor mention is customer-provided", "No disparagement or invented claims", "No coercive contract enforcement"], rejected: [{ name: "Automatic discount", reason: "Does not resolve the confirmed feature gap" }, { name: "Contract enforcement", reason: "Customer choice and fair terms take priority" }] },
     timeline: [{ tone: "critical", title: "Competitor evaluation disclosed", meta: "Feedback · Today, 17:50" }, { tone: "warning", title: "Data export volume increased 48%", meta: "Product · Today, 15:12" }, { tone: "positive", title: "Four core workflows remain healthy", meta: "Product · Today, 12:08" }, { tone: "blue", title: "Competitive hypothesis ranked first", meta: "Rules · Today, 10:05" }],
-    outcome: { status: "In review", response: "Product session booked", usageDelta: "—", healthDelta: "+2", observation: "Simulated; no retention claim" },
+    outcome: { status: "In review", response: "Product session booked", usageDelta: "Not measured", healthDelta: "+2", observation: "Simulated; no retention claim" },
   },
   {
     accountId: "meridian", churnType: "Lifecycle churn", riskLabel: "Inactivity", probability: 68, riskDelta: 8,
@@ -186,7 +186,7 @@ export const churnProfiles: ChurnProfile[] = [
     ],
     action: { recommended: "Pause subscription", description: "Offer a transparent pause until the documented return window.", benefit: "High", friction: "Low", risk: "Low", approvalRequired: true, approvalReason: "A pause changes billing and requires explicit customer consent.", explanation: "Meridian completed its current project and expects to return in October. Offer a pause instead of pressuring continued use.", checks: ["Temporary lifecycle evidence present", "Customer consent required", "Export and cancellation paths remain available"], rejected: [{ name: "Usage campaign", reason: "Inactivity is planned, not accidental" }, { name: "Upgrade review", reason: "No active need during pause period" }] },
     timeline: [{ tone: "positive", title: "Implementation project completed", meta: "Success plan · 16 Jul" }, { tone: "warning", title: "Active team sessions reached zero", meta: "Product · Today, 14:12" }, { tone: "positive", title: "October return window confirmed", meta: "Feedback · Today, 11:05" }, { tone: "blue", title: "Lifecycle hypothesis ranked first", meta: "Rules · Today, 09:05" }],
-    outcome: { status: "Approved", response: "Pause accepted", usageDelta: "—", healthDelta: "0", observation: "Simulated; resume date recorded" },
+    outcome: { status: "Approved", response: "Pause accepted", usageDelta: "Not measured", healthDelta: "0", observation: "Simulated; resume date recorded" },
   },
   {
     accountId: "willow", churnType: "Silent churn", riskLabel: "Inactivity", probability: 64, riskDelta: 12,

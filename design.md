@@ -143,6 +143,12 @@ The light cause case file contains ranked hypotheses with confidence values on a
 
 The event timeline combines usage, billing, support, feedback, decisions, interventions, and outcomes. Event types use icons and labels, not color alone.
 
+#### Bounded agent run
+
+Customer 360 shows the decision agent as an inspectable run rather than a chat surface. The run lists these checkpoints: customer data loaded, health and risks calculated, cause hypotheses generated, policy validation completed, recommendation generated, human review, controlled execution, and outcome measurement.
+
+The structured decision summary shows the recommended action, confidence, concise rationale, supporting evidence references, agent version, policy version, analysis timestamp, and approval owner. The action panel shows eligible alternatives and rejected actions with reasons. Its fixture-only controls support approve, modify, reject, and undo states; no control calls a backend or executes a real customer action.
+
 ### 5.5 Approvals
 
 Use a two-pane inbox: pending items on the left and a detailed evidence review on the right. The reviewer can approve, modify, or reject in the mock UI. Modify/reject requires a reason. The detail view includes account context, recommendation, policy checks, risks, freshness, and audit preview. A confirmation dialog prevents accidental approval.

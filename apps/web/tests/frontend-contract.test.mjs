@@ -95,6 +95,24 @@ test("motion stays accessible and fixture-safe", async () => {
   assert.match(styles, /@media \(prefers-reduced-motion:reduce\)/);
 });
 
+test("Customer 360 exposes the bounded agent decision and human checkpoint", async () => {
+  const source = await readFile(new URL("components/value-loop-app.tsx", root), "utf8");
+  for (const step of [
+    "Customer data loaded",
+    "Health and risks calculated",
+    "Cause hypotheses generated",
+    "Policy validation completed",
+    "Recommendation generated",
+    "Action execution",
+    "Outcome measurement",
+  ]) assert.match(source, new RegExp(step));
+  assert.match(source, /decision-agent-v0\.1/);
+  assert.match(source, /Eligible alternatives/);
+  assert.match(source, /"Approve"/);
+  assert.match(source, /<Menu \/>Modify/);
+  assert.match(source, /<X \/>Reject/);
+});
+
 test("judges can follow the full governed loop without technical knowledge", async () => {
   const source = await readFile(new URL("components/value-loop-app.tsx", root), "utf8");
   for (const step of ["Detect", "Explain", "Decide", "Approve", "Act", "Measure"]) {
