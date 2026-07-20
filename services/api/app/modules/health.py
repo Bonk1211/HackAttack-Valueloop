@@ -67,7 +67,7 @@ def _parse_ts(s: str) -> datetime:
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 def score_health(db: Client, account_id: str) -> HealthScore:
-    profile = assemble_profile(db, account_id)
+    assemble_profile(db, account_id)
     usage = db.table("usage_events").select("*").eq("account_id", account_id).execute().data
     payments = db.table("payment_events").select("*").eq("account_id", account_id).execute().data
     tickets = db.table("support_tickets").select("*").eq("account_id", account_id).execute().data

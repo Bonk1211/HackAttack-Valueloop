@@ -1,4 +1,3 @@
-import pytest
 from app.modules.health import _adoption_score, _experience_score, _financial_score, _value_score
 
 def test_health_northstar_experience_low(client):

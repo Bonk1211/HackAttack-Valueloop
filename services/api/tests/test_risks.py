@@ -1,6 +1,3 @@
-import pytest
-
-
 def test_risks_northstar_cancellation_high(client):
     r = client.get("/api/v1/accounts/northstar/risks")
     body = r.json()

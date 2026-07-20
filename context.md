@@ -71,6 +71,8 @@ The approved interface in `apps/web/` now consumes the FastAPI `/api/v1` contrac
 
 Add Supabase authentication and role checks, safe errors, structured logs, caching/fallbacks, unit/integration/policy/API/E2E coverage, performance checks, deterministic demo reset, and the five-minute rehearsal. Exit when the full Northstar loop works without an external LLM and no critical browser or API errors occur.
 
+Testing and baseline hardening are now implemented locally: hermetic backend unit/contract/security tests, opt-in destructive Supabase integration/E2E/performance tests, frontend unit/component/SWR coverage, production-build Playwright route/workflow/responsive/performance checks, WCAG A/AA axe checks, safe API error envelopes, upload/query limits, security headers, and CI. Supabase authentication and role enforcement remain incomplete, so the project must not yet claim production auth readiness.
+
 ## Decisions Pending
 
 - Logistic regression only versus adding XGBoost.

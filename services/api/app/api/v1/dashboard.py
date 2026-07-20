@@ -2,7 +2,7 @@ import random
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from supabase import Client
 from app.core.db import new_supabase
 from app.deps import get_db
@@ -51,7 +51,7 @@ def kpis(db: Client = Depends(get_db)):
 
 
 @router.get("/dashboard/trend")
-def trend(months: int = 6, db: Client = Depends(get_db)):
+def trend(months: int = Query(6, ge=1, le=24), db: Client = Depends(get_db)):
     accounts = db.table("accounts").select("arr_mrr").execute().data or []
     current_mrr = sum(a["arr_mrr"] for a in accounts)
     result = []

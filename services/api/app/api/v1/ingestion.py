@@ -6,23 +6,27 @@ from app.modules.ingestion import parse_csv, validate_row
 import secrets
 
 router = APIRouter()
+MAX_CSV_BYTES = 5 * 1024 * 1024
 
 # In-memory job store (prototype only)
 JOBS: dict[str, dict] = {}
 
 @router.post("/ingestion/csv")
 async def upload_csv(file: UploadFile = File(...), db: Client = Depends(get_db)):
+    from app.core.errors import ValidationError
+    if not (file.filename or "").lower().endswith(".csv"):
+        raise ValidationError("Only .csv files are accepted")
     contents = await file.read()
+    if len(contents) > MAX_CSV_BYTES:
+        raise ValidationError("CSV exceeds the 5 MB upload limit")
     rows = parse_csv(contents)
     if not rows:
-        from app.core.errors import ValidationError
         raise ValidationError("CSV is empty")
 
     # Pre-validate: reject whole file if any row missing account_id
     for row in rows:
         ok, err = validate_row(row)
         if not ok:
-            from app.core.errors import ValidationError
             raise ValidationError(f"Row validation failed: {err}")
 
     job_id = f"job-{secrets.token_hex(4)}"

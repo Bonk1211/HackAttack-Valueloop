@@ -760,7 +760,7 @@ function Approvals() {
     {approvalError && <p className="inline-error">{approvalError}</p>}
     <section className="approval-layout">
       <motion.article initial={reduce ? false : { opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={reduce ? { duration: 0 } : spring} className="card approval-list">
-        <SectionTitle eyebrow="Pending review" title={`${displayCount} governed requests`} action={<button className="icon-btn"><Filter /></button>} />
+        <SectionTitle eyebrow="Pending review" title={`${displayCount} governed requests`} action={<button className="icon-btn" aria-label="Filter approvals"><Filter /></button>} />
         <label className="search"><Search /><input placeholder="Search approvals" /></label>
         {usingFallback
           ? mockRequests.map((request, index) => {
