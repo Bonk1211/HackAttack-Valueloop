@@ -1,5 +1,6 @@
 import subprocess
 import sys
+import os
 from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
@@ -10,7 +11,20 @@ COMPUTED_TABLES = [
     "cause_hypotheses", "risk_predictions", "health_scores",
 ]
 
-@pytest.fixture(scope="session", autouse=True)
+RUN_INTEGRATION = os.getenv("RUN_INTEGRATION_TESTS") == "1"
+
+
+def pytest_collection_modifyitems(config, items):
+    """Keep local tests hermetic; live Supabase tests are an explicit release gate."""
+    skip_live = pytest.mark.skip(reason="set RUN_INTEGRATION_TESTS=1 to run live Supabase integration tests")
+    for item in items:
+        if {"client", "db"}.intersection(item.fixturenames):
+            item.add_marker("integration")
+            if not RUN_INTEGRATION:
+                item.add_marker(skip_live)
+
+
+@pytest.fixture(scope="session")
 def seed_db_once():
     """Run the deterministic seed once per pytest session."""
     result = subprocess.run([sys.executable, str(SEED_SCRIPT)], capture_output=True, text=True)
@@ -18,13 +32,13 @@ def seed_db_once():
     yield
 
 @pytest.fixture(scope="session")
-def db():
+def db(seed_db_once):
     """Session-scoped Supabase client seeded with 50 accounts."""
     from app.core.db import get_supabase
     return get_supabase()
 
 @pytest.fixture(scope="session")
-def client():
+def client(seed_db_once):
     """Session-scoped FastAPI test client."""
     from app.main import app
     return TestClient(app)
@@ -46,8 +60,12 @@ def _wipe(db):
 
 
 @pytest.fixture(autouse=True)
-def wipe_computed(db):
+def wipe_computed(request):
     """Clear derived tables between tests so they don't depend on execution order."""
+    if not {"client", "db"}.intersection(request.fixturenames):
+        yield
+        return
+    db = request.getfixturevalue("db")
     _wipe(db)
     yield
     _wipe(db)

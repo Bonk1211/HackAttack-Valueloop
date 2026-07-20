@@ -1,7 +1,7 @@
 import secrets
 from datetime import datetime, timezone
 from supabase import Client
-from app.models import Intervention, AuditLog
+from app.models import Intervention
 from app.core.errors import NotFound, ValidationError
 
 VALID_TRANSITIONS = {

@@ -1,7 +1,7 @@
 # ValueLoop — unified dev environment
 # Usage: make install && make run
 
-.PHONY: install install-be install-fe run run-be run-fe test test-be test-fe seed clean help
+.PHONY: install install-be install-fe run run-be run-fe test test-be test-be-live test-fe test-fe-e2e test-release seed clean help
 
 # ─── Install ───────────────────────────────────────────────────────────
 
@@ -33,11 +33,19 @@ run-fe: ## Run frontend only (next dev on port 3000)
 
 test: test-be test-fe ## Run all tests
 
-test-be: ## Run backend tests with coverage
-	cd services/api && .venv/bin/pytest --cov=app -v
+test-be: ## Run hermetic backend tests with coverage
+	cd services/api && python -m pytest --cov=app --cov-report=term-missing --cov-fail-under=65
 
-test-fe: ## Run frontend tests
-	cd apps/web && npm test
+test-be-live: ## Reset and test a disposable live Supabase project
+	cd services/api && RUN_INTEGRATION_TESTS=1 python -m pytest -m integration --cov=app --cov-report=term-missing --cov-fail-under=70
+
+test-fe: ## Run frontend contract and coverage tests
+	cd apps/web && npm run test:contract && npm run test:coverage
+
+test-fe-e2e: ## Run production-build Playwright tests
+	cd apps/web && npm run test:e2e
+
+test-release: test test-fe-e2e ## Run all hermetic release gates
 
 # ─── Seed ──────────────────────────────────────────────────────────────
 

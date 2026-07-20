@@ -12,7 +12,7 @@ def list_audit(
     entity_type: Optional[str] = Query(None),
     entity_id: Optional[str] = Query(None),
     actor_id: Optional[str] = Query(None),
-    limit: int = Query(default=100, le=1000),
+    limit: int = Query(default=100, ge=1, le=1000),
     db: Client = Depends(get_db),
 ):
     q = db.table("audit_logs").select("*")

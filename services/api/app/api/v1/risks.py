@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from supabase import Client
 from app.deps import get_db
 from app.models import envelope
@@ -16,7 +16,7 @@ def get_risks(account_id: str, db: Client = Depends(get_db)):
 
 
 @router.get("/accounts/{account_id}/risk-history")
-def risk_history(account_id: str, days: int = 7, db: Client = Depends(get_db)):
+def risk_history(account_id: str, days: int = Query(7, ge=1, le=90), db: Client = Depends(get_db)):
     rows = (
         db.table("risk_predictions")
         .select("*")

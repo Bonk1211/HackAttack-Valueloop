@@ -70,6 +70,8 @@ npm run dev
 
 Use `npm run build`, `npm test`, `npm run lint`, and `npx tsc --noEmit` for verification. Set `NEXT_PUBLIC_API_URL` to the FastAPI `/api/v1` base URL; it defaults to `http://localhost:8000/api/v1`.
 
+Production verification is split into deterministic local gates and an explicit live-Supabase gate. Run `make test-release` for backend unit/contract/security coverage plus frontend unit/component/contract/browser/accessibility checks. Run `make test-be-live` only against a disposable synthetic Supabase test project because it resets derived data. See [`docs/testing.md`](docs/testing.md) for the full matrix, direct Windows commands, performance budgets, and current authentication limitation.
+
 ### Backend
 
 The backend uses Python 3.13 + FastAPI + Supabase:

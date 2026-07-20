@@ -31,16 +31,23 @@ exclude = ["supabase*", "tests*"]
 line-length = 120
 target-version = "py312"
 
+[tool.ruff.lint]
+ignore = ["E701"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 addopts = "-v --tb=short"
+markers = [
+    "integration: requires a configured, reachable Supabase test project",
+    "performance: opt-in latency budget checks",
+]
 
 [tool.coverage.run]
 source = ["app"]
 omit = ["app/api/v1/__init__.py"]
 
 [tool.coverage.report]
-fail_under = 70
 show_missing = true
 skip_empty = true

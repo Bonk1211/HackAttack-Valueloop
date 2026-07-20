@@ -60,7 +60,7 @@ export const createIntervention = (body: { account_id: string; recommended_actio
 export const transitionIntervention = (id: string, body: { status: string; actor_id?: string; actor_role?: string; reason?: string; final_action?: string }) =>
   api<Intervention>(`/interventions/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
-export type OutcomeInput = Omit<Outcome, 'intervention_id' | 'recorded_at'>;
+export type OutcomeInput = Partial<Omit<Outcome, 'intervention_id' | 'recorded_at'>>;
 export const recordOutcome = (id: string, body: OutcomeInput) =>
   api<Outcome>(`/interventions/${id}/outcome`, { method: 'POST', body: JSON.stringify(body) });
 
