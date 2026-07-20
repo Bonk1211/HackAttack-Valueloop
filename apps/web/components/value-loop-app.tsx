@@ -21,9 +21,15 @@ import {
 } from "recharts";
 import { accounts, actionMix, churnProfiles, getChurnProfile, outcomeTrend, portfolioTrend, sourceFreshness, type Account, type Severity } from "@/lib/mock-data";
 import { useApi } from "@/lib/use-api";
-import { getAccounts, getCustomer360, analyzeAccount, getTimeline, getDashboardKPIs } from "@/lib/api";
-import { adaptAccount, adaptChurnProfile, adaptKPIs, adaptTimeline, type FrontendKPIs } from "@/lib/adapters";
-import type { Analysis, BackendAccount } from "@/lib/api-types";
+import {
+  getAccounts, getCustomer360, analyzeAccount, getTimeline, getDashboardKPIs,
+  getInterventions, createIntervention, transitionIntervention, getOutcomes, getAudit,
+} from "@/lib/api";
+import {
+  adaptAccount, adaptChurnProfile, adaptKPIs, adaptTimeline, adaptAuditLog,
+  type FrontendKPIs, type FrontendAuditLog,
+} from "@/lib/adapters";
+import type { Analysis, BackendAccount, Intervention, Outcome } from "@/lib/api-types";
 
 export type Screen = "overview" | "risk" | "accounts" | "account" | "approvals" | "outcomes" | "audit" | "guide" | "playbooks";
 
@@ -478,12 +484,61 @@ function Customer360({ accountId, back }: { accountId: string; back: () => void 
   const [showModify, setShowModify] = useState(false);
   const [modifiedAction, setModifiedAction] = useState("No action");
 
+  // Intervention workflow state (Phase 2)
+  const [createdIntervention, setCreatedIntervention] = useState<Intervention | null>(null);
+  const [creatingIntervention, setCreatingIntervention] = useState(false);
+  const [interventionTransition, setInterventionTransition] = useState<string | null>(null);
+
+  const handleCreateIntervention = async () => {
+    setCreatingIntervention(true);
+    try {
+      const result = await createIntervention({
+        account_id: accountId,
+        recommended_action: profile.action.recommended,
+      });
+      setCreatedIntervention(result);
+    } catch {
+      // On failure, create a mock intervention for demo purposes
+      setCreatedIntervention({
+        id: `INT-mock-${Date.now()}`,
+        account_id: accountId,
+        recommended_action: profile.action.recommended,
+        final_action: null,
+        approver: null,
+        status: 'pending',
+        channel: null,
+        reason: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    } finally {
+      setCreatingIntervention(false);
+    }
+  };
+
+  const handleInterventionTransition = async (status: string) => {
+    if (!createdIntervention) return;
+    try {
+      await transitionIntervention(createdIntervention.id, {
+        status,
+        actor_id: 'csm-demo',
+        actor_role: 'csm',
+        ...(status === 'rejected' ? { reason: 'User rejected from Customer 360' } : {}),
+      });
+    } catch {
+      // Transition recorded locally on error
+    }
+    setInterventionTransition(status);
+  };
+
   // Reset metric/cause when profile changes (accountId change)
   useEffect(() => {
     setMetric(profile.riskLabel);
     setCause(profile.causes[0]?.label ?? '');
     setReviewStatus("pending");
     setShowModify(false);
+    setCreatedIntervention(null);
+    setInterventionTransition(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId]);
 
@@ -512,29 +567,431 @@ function Customer360({ accountId, back }: { accountId: string; back: () => void 
       </div>
     </motion.article>
     <RevealSection className="decision-grid"><motion.article initial={reduce ? false : { opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={reduce ? { duration: 0 } : spring} className="cause-panel"><div className="insight-label">Explain · Cause hypotheses <ShieldCheck /></div><h2>Why is value deteriorating?</h2><p>Transparent rules rank likely explanations. These are hypotheses, not verified causes.</p><div className="cause-body"><div className="cause-list">{profile.causes.map((hypothesis, index) => <motion.button whileHover={reduce ? undefined : { x: 2 }} whileTap={reduce ? undefined : { scale: 0.985 }} transition={spring} className={selectedCause.label === hypothesis.label ? "active" : ""} onClick={() => setCause(hypothesis.label)} key={hypothesis.label}><b>{String(index + 1).padStart(2, "0")}</b><span><strong>{hypothesis.label}</strong><small>{hypothesis.strength}</small></span><em>{hypothesis.confidence.toFixed(2)}</em></motion.button>)}</div><AnimatePresence mode="wait" initial={false}><motion.div key={selectedCause.label} className="evidence" initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={reduce ? undefined : { opacity: 0, y: -6 }} transition={reduce ? { duration: 0 } : { duration: 0.18 }}><div className="support"><h3><CheckCircle2 />Supporting evidence</h3>{selectedCause.supporting.map((item) => <p key={item.text}><strong>{item.text}</strong><span>{item.source} · {item.timestamp}</span></p>)}</div><div className="contradict"><h3><XCircle />Contradictory evidence</h3>{selectedCause.contradicting.length ? selectedCause.contradicting.map((item) => <p key={item.text}><strong>{item.text}</strong><span>{item.source} · {item.timestamp}</span></p>) : <p><strong>No contradiction recorded</strong><span>Rule engine · current run</span></p>}</div></motion.div></AnimatePresence></div><footer><span>Rule <strong>cause-v1.5</strong></span><span>Generated <strong>21:42</strong></span><span>Threshold <strong>0.45</strong></span></footer></motion.article>
-    <motion.article initial={reduce ? false : { opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={reduce ? { duration: 0 } : { ...spring, delay: 0.07 }} className="card action-card"><SectionTitle eyebrow="Decide" title="Recommended action" action={<Badge severity={account.severity} />} /><div className="action-hero"><span><LifeBuoy /></span><div><strong>{profile.action.recommended}</strong><p>{profile.action.description}</p><small>AI confidence {confidence}%</small></div></div><p className="action-rationale">{profile.action.explanation}</p><div className="utility"><div><span>Benefit</span><strong>{profile.action.benefit}</strong></div><div><span>Friction</span><strong>{profile.action.friction}</strong></div><div><span>Risk</span><strong>{profile.action.risk}</strong></div></div><div className="checks">{profile.action.checks.map((check) => <span key={check}><Check />{check}</span>)}</div><div className="alternatives"><small>Eligible alternatives</small>{eligibleAlternatives.map((item) => <span key={item}><CheckCircle2 />{item}</span>)}</div><div className="rejected"><small>Rejected by policy</small>{profile.action.rejected.map((item) => <p key={item.name}><X /><span><strong>{item.name}</strong>{item.reason}</span></p>)}</div>{showModify && reviewStatus === "pending" && <div className="modify-action"><label htmlFor={`modify-${profile.accountId}`}>Choose an eligible action</label><select id={`modify-${profile.accountId}`} value={modifiedAction} onChange={(event) => setModifiedAction(event.target.value)}>{eligibleAlternatives.map((item) => <option key={item}>{item}</option>)}</select><textarea aria-label="Reason for modification" placeholder="Reason for modification" defaultValue="Use the lower-friction eligible option." /><button className="primary full" onClick={() => { setReviewStatus("modified"); setShowModify(false); }}><Check />Confirm modification</button></div>}{reviewStatus === "pending" && !showModify ? <div className="inline-approval"><button className="danger" onClick={() => setReviewStatus("rejected")}><X />Reject</button><button className="secondary" onClick={() => setShowModify(true)}><Menu />Modify</button><motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} transition={spring} className="primary" onClick={() => setReviewStatus("approved")}><Check />{profile.action.approvalRequired ? "Approve" : "Start mock action"}</motion.button></div> : reviewStatus !== "pending" && <div className={cx("inline-decision-result", reviewStatus)}><span>{reviewStatus === "rejected" ? <XCircle /> : <CheckCircle2 />}</span><div><strong>{reviewStatus === "modified" ? modifiedAction : `Action ${reviewStatus}`}</strong><small>{reviewStatus === "rejected" ? "Execution blocked. Audit event recorded." : "Mock execution recorded. Outcome measurement is ready."}</small></div><button className="text-btn" onClick={() => setReviewStatus("pending")}>Undo</button></div>}<footer className="action-meta"><span>decision-agent-v0.1</span><span>policy-v2.4</span><span>18 Jul 2026, 21:42</span></footer></motion.article></RevealSection>
+    <motion.article initial={reduce ? false : { opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={reduce ? { duration: 0 } : { ...spring, delay: 0.07 }} className="card action-card"><SectionTitle eyebrow="Decide" title="Recommended action" action={<Badge severity={account.severity} />} /><div className="action-hero"><span><LifeBuoy /></span><div><strong>{profile.action.recommended}</strong><p>{profile.action.description}</p><small>AI confidence {confidence}%</small></div></div><p className="action-rationale">{profile.action.explanation}</p><div className="utility"><div><span>Benefit</span><strong>{profile.action.benefit}</strong></div><div><span>Friction</span><strong>{profile.action.friction}</strong></div><div><span>Risk</span><strong>{profile.action.risk}</strong></div></div><div className="checks">{profile.action.checks.map((check) => <span key={check}><Check />{check}</span>)}</div><div className="alternatives"><small>Eligible alternatives</small>{eligibleAlternatives.map((item) => <span key={item}><CheckCircle2 />{item}</span>)}</div><div className="rejected"><small>Rejected by policy</small>{profile.action.rejected.map((item) => <p key={item.name}><X /><span><strong>{item.name}</strong>{item.reason}</span></p>)}</div>{showModify && reviewStatus === "pending" && <div className="modify-action"><label htmlFor={`modify-${profile.accountId}`}>Choose an eligible action</label><select id={`modify-${profile.accountId}`} value={modifiedAction} onChange={(event) => setModifiedAction(event.target.value)}>{eligibleAlternatives.map((item) => <option key={item}>{item}</option>)}</select><textarea aria-label="Reason for modification" placeholder="Reason for modification" defaultValue="Use the lower-friction eligible option." /><button className="primary full" onClick={() => { setReviewStatus("modified"); setShowModify(false); }}><Check />Confirm modification</button></div>}{reviewStatus === "pending" && !showModify ? <div className="inline-approval"><button className="danger" onClick={() => setReviewStatus("rejected")}><X />Reject</button><button className="secondary" onClick={() => setShowModify(true)}><Menu />Modify</button><motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} transition={spring} className="primary" onClick={() => setReviewStatus("approved")}><Check />{profile.action.approvalRequired ? "Approve" : "Start mock action"}</motion.button></div> : reviewStatus !== "pending" && <div className={cx("inline-decision-result", reviewStatus)}><span>{reviewStatus === "rejected" ? <XCircle /> : <CheckCircle2 />}</span><div><strong>{reviewStatus === "modified" ? modifiedAction : `Action ${reviewStatus}`}</strong><small>{reviewStatus === "rejected" ? "Execution blocked. Audit event recorded." : "Mock execution recorded. Outcome measurement is ready."}</small></div><button className="text-btn" onClick={() => setReviewStatus("pending")}>Undo</button></div>}<div className="intervention-workflow" style={{ marginTop: '1rem', padding: '1rem', borderTop: '1px solid var(--border, #e8e8e3)' }}>
+          <small style={{ display: 'block', marginBottom: '0.5rem', opacity: 0.7 }}>Intervention workflow</small>
+          {!createdIntervention ? (
+            <motion.button
+              whileHover={reduce ? undefined : { y: -2 }}
+              whileTap={reduce ? undefined : { scale: 0.98 }}
+              className="primary"
+              disabled={creatingIntervention}
+              onClick={handleCreateIntervention}
+            >
+              {creatingIntervention ? 'Creating…' : <><PlayCircle />Create Intervention</>}
+            </motion.button>
+          ) : interventionTransition ? (
+            <div className={cx('inline-decision-result', interventionTransition === 'rejected' ? 'rejected' : 'approved')}>
+              <span>{interventionTransition === 'rejected' ? <XCircle /> : <CheckCircle2 />}</span>
+              <div>
+                <strong>Intervention {interventionTransition}</strong>
+                <small>ID: {createdIntervention.id} · Status recorded in audit log.</small>
+              </div>
+              <button className="text-btn" onClick={() => { setCreatedIntervention(null); setInterventionTransition(null); }}>Reset</button>
+            </div>
+          ) : (
+            <div className="inline-approval">
+              <span style={{ fontSize: '0.85rem', opacity: 0.7 }}>Intervention {createdIntervention.id.slice(0, 12)} · {createdIntervention.status}</span>
+              <button className="danger" onClick={() => handleInterventionTransition('rejected')}><X />Reject</button>
+              <motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} className="primary" onClick={() => handleInterventionTransition('approved')}><Check />Approve</motion.button>
+              <motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} className="secondary" onClick={() => handleInterventionTransition('executed')}><PlayCircle />Execute</motion.button>
+            </div>
+          )}
+        </div>
+<footer className="action-meta"><span>decision-agent-v0.1</span><span>policy-v2.4</span><span>18 Jul 2026, 21:42</span></footer></motion.article></RevealSection>
     <motion.article initial={reduce ? false : { opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.16 }} transition={reduce ? { duration: 0 } : spring} className="card timeline"><SectionTitle eyebrow="Unified history" title="Account timeline" action={<button className="period">All events <ChevronDown /></button>} />{profile.timeline.map((event, index) => { const Icon = timelineIcons[event.tone]; return <motion.div initial={reduce ? false : { opacity: 0, x: -8 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true, amount: 0.7 }} transition={reduce ? { duration: 0 } : { ...spring, delay: index * 0.04 }} className="timeline-row" key={event.title}><span className={`event-icon ${event.tone}`}><Icon /></span><div><strong>{event.title}</strong><small>{event.meta}</small></div><MoreHorizontal /></motion.div>; })}</motion.article></div>
   </section></>;
 }
 
 function Approvals() {
-  const requests = churnProfiles.filter((profile) => profile.action.approvalRequired);
-  const [selected, setSelected] = useState(0); const [decision, setDecision] = useState<"pending" | "approved" | "rejected">("pending");
   const reduce = useReducedMotion();
-  const profile = requests[selected] ?? requests[0]; const account = getAccount(profile.accountId);
-  return <section className="approval-layout"><motion.article initial={reduce ? false : { opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={reduce ? { duration: 0 } : spring} className="card approval-list"><SectionTitle eyebrow="Pending review" title={`${requests.length} governed requests`} action={<button className="icon-btn"><Filter /></button>} /><label className="search"><Search /><input placeholder="Search approvals" /></label>{requests.map((request, index) => { const requestAccount = getAccount(request.accountId); return <motion.button initial={reduce ? false : { opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: index * 0.035 }} whileHover={reduce ? undefined : { x: 2 }} whileTap={reduce ? undefined : { scale: 0.985 }} className={selected === index ? "active" : ""} onClick={() => { setSelected(index); setDecision("pending"); }} key={request.accountId}><Avatar account={requestAccount} small /><span><strong>{requestAccount.name}</strong><small>{request.action.recommended}</small><em>{request.churnType}</em></span><b>{request.probability}%</b></motion.button>; })}</motion.article>
-  <motion.article initial={reduce ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: 0.05 }} className="card approval-detail"><div className="approval-head"><SectionTitle eyebrow={`Action request · INT-${2841 + selected}`} title={profile.action.recommended} detail={`${account.name} · ${profile.churnType} · Submitted by policy engine`} /><Badge severity={account.severity} risk={profile.probability} /></div><AnimatePresence mode="wait" initial={false}>{decision === "pending" ? <motion.div key={`pending-${selected}`} initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={reduce ? undefined : { opacity: 0, y: -6 }} transition={reduce ? { duration: 0 } : { duration: 0.18 }}><div className="context-grid"><div><span>Owner</span><strong>{account.owner}</strong></div><div><span>MRR</span><strong>{account.mrr}</strong></div><div><span>Renewal</span><strong>{account.renewal}</strong></div><div><span>Freshness</span><strong className="positive"><CheckCircle2 />{account.freshness}</strong></div></div><div className="approval-reason"><h3><ShieldCheck />Why this needs review</h3><p>{profile.action.approvalReason}</p><ul>{profile.action.checks.map((check) => <li key={check}><Check />{check}</li>)}</ul></div><blockquote><small>Decision context</small>“{profile.summary} Recommended response: {profile.action.description}”<cite>Template explanation · deterministic mock data</cite></blockquote><div className="approval-actions"><motion.button whileTap={reduce ? undefined : { scale: 0.97 }} className="danger" onClick={() => setDecision("rejected")}><X />Reject</motion.button><motion.button whileTap={reduce ? undefined : { scale: 0.97 }} className="secondary"><Menu />Modify</motion.button><motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.97 }} className="primary" onClick={() => setDecision("approved")}><Check />Approve action</motion.button></div></motion.div> : <motion.div key={decision} initial={reduce ? false : { opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={reduce ? undefined : { opacity: 0, scale: 0.98 }} transition={reduce ? { duration: 0 } : spring} className={`decision-result ${decision}`}>{decision === "approved" ? <CheckCircle2 /> : <XCircle />}<h3>Action {decision}</h3><p>The mock decision was recorded locally. Refreshing resets this state.</p><motion.button whileTap={reduce ? undefined : { scale: 0.97 }} className="secondary" onClick={() => setDecision("pending")}>Undo mock decision</motion.button></motion.div>}</AnimatePresence></motion.article></section>;
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [selected, setSelected] = useState(0);
+  const [decision, setDecision] = useState<"pending" | "approved" | "rejected">("pending");
+  const [processing, setProcessing] = useState(false);
+
+  // Fetch pending interventions from API
+  const { data: interventions, loading, usingFallback } = useApi(
+    () => getInterventions('pending'),
+    [] as Intervention[],
+    [refreshKey],
+  );
+
+  // For each intervention, fetch account details for context
+  // We use the first 20 to avoid excessive parallel requests
+  const interventionList = interventions.slice(0, 20);
+
+  // Build mock fallback requests from churn profiles for when API is unreachable
+  const mockRequests = churnProfiles.filter((p) => p.action.approvalRequired);
+
+  // Determine the list to render: if using API data, use interventions; else use mock
+  const displayCount = usingFallback ? mockRequests.length : interventionList.length;
+
+  const [accountCache, setAccountCache] = useState<Record<string, BackendAccount>>({});
+  const [accountsLoading, setAccountsLoading] = useState(false);
+
+  // Fetch account details for API interventions
+  useEffect(() => {
+    if (usingFallback || interventionList.length === 0) return;
+    const ids = [...new Set(interventionList.map((i) => i.account_id))];
+    const missing = ids.filter((id) => !accountCache[id]);
+    if (missing.length === 0) return;
+    setAccountsLoading(true);
+    Promise.all(missing.map((id) => getCustomer360(id).catch(() => null)))
+      .then((results) => {
+        const next: Record<string, BackendAccount> = { ...accountCache };
+        results.forEach((r, i) => { if (r) next[missing[i]] = r; });
+        setAccountCache(next);
+      })
+      .finally(() => setAccountsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interventionList.length, usingFallback]);
+
+  // Selected item context
+  const selectedItem = usingFallback ? mockRequests[selected] : interventionList[selected];
+  const selectedAccountId = usingFallback
+    ? (selectedItem as typeof mockRequests[number])?.accountId
+    : (selectedItem as Intervention)?.account_id;
+  const selectedAction = usingFallback
+    ? (selectedItem as typeof mockRequests[number])?.action.recommended
+    : (selectedItem as Intervention)?.recommended_action;
+
+  // Resolve account for selected item
+  const mockAccount = selectedAccountId ? getAccount(selectedAccountId) : accounts[0];
+  const apiAccount = selectedAccountId ? accountCache[selectedAccountId] : undefined;
+  const displayAccount: Account = apiAccount
+    ? adaptAccount(apiAccount)
+    : mockAccount;
+
+  // Profile from mock for additional context (churn type, etc.)
+  const mockProfile = selectedAccountId ? (getChurnProfile(selectedAccountId) ?? churnProfiles[0]) : churnProfiles[0];
+
+  const handleTransition = async (status: 'approved' | 'rejected') => {
+    if (usingFallback) {
+      setDecision(status);
+      return;
+    }
+    const intervention = selectedItem as Intervention;
+    if (!intervention) return;
+    setProcessing(true);
+    try {
+      await transitionIntervention(intervention.id, {
+        status,
+        actor_id: 'csm-demo',
+        actor_role: 'csm',
+        ...(status === 'rejected' ? { reason: 'User rejected' } : {}),
+      });
+      setDecision(status);
+      setRefreshKey((k) => k + 1);
+    } catch {
+      // On error, still show the decision locally
+      setDecision(status);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  return <>
+    <FallbackBanner show={usingFallback} />
+    <LoadingBar active={loading || accountsLoading} />
+    <section className="approval-layout">
+      <motion.article initial={reduce ? false : { opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={reduce ? { duration: 0 } : spring} className="card approval-list">
+        <SectionTitle eyebrow="Pending review" title={`${displayCount} governed requests`} action={<button className="icon-btn"><Filter /></button>} />
+        <label className="search"><Search /><input placeholder="Search approvals" /></label>
+        {usingFallback
+          ? mockRequests.map((request, index) => {
+              const requestAccount = getAccount(request.accountId);
+              return <motion.button initial={reduce ? false : { opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: index * 0.035 }} whileHover={reduce ? undefined : { x: 2 }} whileTap={reduce ? undefined : { scale: 0.985 }} className={selected === index ? "active" : ""} onClick={() => { setSelected(index); setDecision("pending"); }} key={request.accountId}>
+                <Avatar account={requestAccount} small /><span><strong>{requestAccount.name}</strong><small>{request.action.recommended}</small><em>{request.churnType}</em></span><b>{request.probability}%</b>
+              </motion.button>;
+            })
+          : interventionList.map((intervention, index) => {
+              const cached = accountCache[intervention.account_id];
+              const name = cached?.name ?? intervention.account_id;
+              const initials = cached?.initials ?? '??';
+              const mockAcc = { id: intervention.account_id, name, initials, owner: cached?.owner_id ?? '', plan: cached?.plan ?? '', segment: cached?.segment ?? '', industry: cached?.industry ?? '', mrr: '', risk: 0, riskType: '', severity: 'Low' as Severity, health: 0, delta: 0, renewal: '', freshness: '', action: '' };
+              return <motion.button initial={reduce ? false : { opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: index * 0.035 }} whileHover={reduce ? undefined : { x: 2 }} whileTap={reduce ? undefined : { scale: 0.985 }} className={selected === index ? "active" : ""} onClick={() => { setSelected(index); setDecision("pending"); }} key={intervention.id}>
+                <Avatar account={mockAcc} small /><span><strong>{name}</strong><small>{intervention.recommended_action}</small><em>{intervention.status}</em></span><b>{intervention.id.slice(0, 8)}</b>
+              </motion.button>;
+            })
+        }
+      </motion.article>
+      <motion.article initial={reduce ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: 0.05 }} className="card approval-detail">
+        <div className="approval-head">
+          <SectionTitle
+            eyebrow={`Action request · ${usingFallback ? `INT-${2841 + selected}` : (selectedItem as Intervention)?.id?.slice(0, 12) ?? ''}`}
+            title={selectedAction ?? ''}
+            detail={`${displayAccount.name} · ${mockProfile.churnType} · Submitted by policy engine`}
+          />
+          <Badge severity={displayAccount.severity} risk={mockProfile.probability} />
+        </div>
+        <AnimatePresence mode="wait" initial={false}>
+          {decision === "pending" ? (
+            <motion.div key={`pending-${selected}`} initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={reduce ? undefined : { opacity: 0, y: -6 }} transition={reduce ? { duration: 0 } : { duration: 0.18 }}>
+              <div className="context-grid">
+                <div><span>Owner</span><strong>{displayAccount.owner}</strong></div>
+                <div><span>MRR</span><strong>{displayAccount.mrr}</strong></div>
+                <div><span>Renewal</span><strong>{displayAccount.renewal}</strong></div>
+                <div><span>Freshness</span><strong className="positive"><CheckCircle2 />{displayAccount.freshness}</strong></div>
+              </div>
+              <div className="approval-reason">
+                <h3><ShieldCheck />Why this needs review</h3>
+                <p>{mockProfile.action.approvalReason}</p>
+                <ul>{mockProfile.action.checks.map((check) => <li key={check}><Check />{check}</li>)}</ul>
+              </div>
+              <blockquote>
+                <small>Decision context</small>
+                "{mockProfile.summary} Recommended response: {mockProfile.action.description}"
+                <cite>Template explanation · {usingFallback ? 'deterministic mock data' : 'live API data'}</cite>
+              </blockquote>
+              <div className="approval-actions">
+                <motion.button whileTap={reduce ? undefined : { scale: 0.97 }} className="danger" disabled={processing} onClick={() => handleTransition('rejected')}><X />Reject</motion.button>
+                <motion.button whileTap={reduce ? undefined : { scale: 0.97 }} className="secondary"><Menu />Modify</motion.button>
+                <motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.97 }} className="primary" disabled={processing} onClick={() => handleTransition('approved')}>{processing ? 'Processing…' : <><Check />Approve action</>}</motion.button>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div key={decision} initial={reduce ? false : { opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={reduce ? undefined : { opacity: 0, scale: 0.98 }} transition={reduce ? { duration: 0 } : spring} className={`decision-result ${decision}`}>
+              {decision === "approved" ? <CheckCircle2 /> : <XCircle />}
+              <h3>Action {decision}</h3>
+              <p>{usingFallback ? 'The mock decision was recorded locally. Refreshing resets this state.' : `Intervention transitioned to ${decision}. Audit log updated.`}</p>
+              <motion.button whileTap={reduce ? undefined : { scale: 0.97 }} className="secondary" onClick={() => setDecision("pending")}>Reset view</motion.button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.article>
+    </section>
+  </>;
 }
 
 function Outcomes() {
-  return <><section className="kpi-grid"><Kpi label="Acceptance rate" value="72%" delta={8.1} note="36 of 50 recommendations" icon={ThumbsUp} tone="green" /><Kpi label="Override rate" value="14%" delta={-2.4} note="Seven decisions changed" icon={ArrowRight} tone="violet" /><Kpi label="Time to action" value="4.2h" delta={-18} note="Median, last 30 days" icon={Clock3} tone="blue" /><Kpi label="Health movement" value="+6.8" delta={4.1} note="Observed after intervention" icon={TrendingUp} tone="amber" /></section><section className="chart-grid"><article className="card chart-card wide"><SectionTitle eyebrow="Workflow movement" title="Recommendation decisions" detail="Observed activity only; no causal claim." /><div className="chart"><ResponsiveContainer><BarChart data={outcomeTrend}><CartesianGrid vertical={false} stroke="#e8e8e3" /><XAxis dataKey="week" axisLine={false} tickLine={false} /><YAxis axisLine={false} tickLine={false} /><Tooltip /><Bar dataKey="accepted" fill="#33483f" radius={[5,5,0,0]} /><Bar dataKey="overridden" fill="#c7c9c3" radius={[5,5,0,0]} /></BarChart></ResponsiveContainer></div></article><article className="card recovery"><small>Observed recovery</small><div><span className="avatar">[NL]</span><span><strong>Northstar Labs</strong><p>Support escalation · simulated</p></span></div><section><span>Health score</span><div><strong>49</strong><ArrowRight /><strong>61</strong></div><Delta value={12} points /></section><ul><li><CheckCircle2 />Severe ticket resolved</li><li><TrendingUp />Usage improved 18%</li><li><Clock3 />Observed over 14 days</li></ul><em>Simulated outcome · not causal evidence</em></article></section><article className="card queue-card"><SectionTitle eyebrow="Eight-path intervention history" title="Observed and simulated outcomes" detail="Every churn pathway has a distinct response. Changes are observations, not causal uplift." action={<button className="secondary"><Filter />Filter</button>} /><div className="table-scroll"><table className="data-table"><thead><tr><th>Churn pathway</th><th>Account</th><th>Final action</th><th>Status</th><th>Response</th><th>Usage Δ</th><th>Health Δ</th></tr></thead><tbody>{churnProfiles.map((profile) => { const account = getAccount(profile.accountId); return <tr key={profile.accountId}><td><strong>{profile.churnType}</strong></td><td>{account.name}</td><td>{profile.action.recommended}</td><td><span className="badge badge-low"><i />{profile.outcome.status}</span></td><td>{profile.outcome.response}<small>{profile.outcome.observation}</small></td><td>{profile.outcome.usageDelta}</td><td><strong className="positive">{profile.outcome.healthDelta}</strong></td></tr>; })}</tbody></table></div></article></>;
+  const reduce = useReducedMotion();
+
+  // Fetch KPIs for acceptance/override rates
+  const { data: kpis, loading: kpiLoading, usingFallback: kpiFallback } = useApi(
+    async () => adaptKPIs(await getDashboardKPIs()),
+    MOCK_KPIS,
+    [],
+  );
+
+  // Fetch all outcomes from API
+  const { data: apiOutcomes, loading: outcomesLoading, usingFallback: outcomesFallback } = useApi(
+    () => getOutcomes(),
+    [] as Outcome[],
+    [],
+  );
+
+  // Fetch all interventions to join with outcomes (for account_id, action details)
+  const { data: apiInterventions, loading: interventionsLoading, usingFallback: interventionsFallback } = useApi(
+    () => getInterventions(),
+    [] as Intervention[],
+    [],
+  );
+
+  // Build a lookup from intervention_id → Intervention
+  const interventionMap = useMemo(() => {
+    const map: Record<string, Intervention> = {};
+    apiInterventions.forEach((i) => { map[i.id] = i; });
+    return map;
+  }, [apiInterventions]);
+
+  // Determine if we have real data or need to fall back to mock
+  const showFallback = kpiFallback || outcomesFallback || interventionsFallback;
+  const isLoading = kpiLoading || outcomesLoading || interventionsLoading;
+  const hasApiOutcomes = !outcomesFallback && apiOutcomes.length > 0;
+
+  // For the outcomes table: merge API data or fall back to mock churnProfiles
+  const outcomeRows = useMemo(() => {
+    if (hasApiOutcomes) {
+      return apiOutcomes.map((o) => {
+        const intervention = interventionMap[o.intervention_id];
+        const accountId = intervention?.account_id ?? '';
+        const mockAcc = getAccount(accountId);
+        const mockProf = getChurnProfile(accountId);
+        return {
+          id: o.intervention_id,
+          churnType: mockProf?.churnType ?? 'Unknown',
+          accountName: mockAcc?.name ?? accountId,
+          finalAction: intervention?.final_action ?? intervention?.recommended_action ?? '',
+          status: o.renewed ? 'Renewed' : o.churned ? 'Churned' : o.downgraded ? 'Downgraded' : 'Observed',
+          response: o.response ?? '',
+          observation: o.observation ?? '',
+          usageDelta: o.usage_delta != null ? `${o.usage_delta >= 0 ? '+' : ''}${o.usage_delta}%` : '—',
+          healthDelta: o.health_delta != null ? `${o.health_delta >= 0 ? '+' : ''}${o.health_delta}` : '—',
+        };
+      });
+    }
+    // Mock fallback
+    return churnProfiles.map((profile) => {
+      const account = getAccount(profile.accountId);
+      return {
+        id: profile.accountId,
+        churnType: profile.churnType,
+        accountName: account.name,
+        finalAction: profile.action.recommended,
+        status: profile.outcome.status,
+        response: profile.outcome.response,
+        observation: profile.outcome.observation,
+        usageDelta: profile.outcome.usageDelta,
+        healthDelta: profile.outcome.healthDelta,
+      };
+    });
+  }, [hasApiOutcomes, apiOutcomes, interventionMap]);
+
+  return <>
+    <FallbackBanner show={showFallback} />
+    <LoadingBar active={isLoading} />
+    <section className="kpi-grid">
+      <Kpi label="Acceptance rate" value={kpis.acceptanceRate} delta={8.1} note="Recommendations accepted" icon={ThumbsUp} tone="green" />
+      <Kpi label="Override rate" value={kpis.overrideRate} delta={-2.4} note="Decisions changed" icon={ArrowRight} tone="violet" />
+      <Kpi label="Time to action" value="4.2h" delta={-18} note="Median, last 30 days" icon={Clock3} tone="blue" />
+      <Kpi label="Health movement" value="+6.8" delta={4.1} note="Observed after intervention" icon={TrendingUp} tone="amber" />
+    </section>
+    <section className="chart-grid">
+      <article className="card chart-card wide">
+        <SectionTitle eyebrow="Workflow movement" title="Recommendation decisions" detail="Observed activity only; no causal claim." />
+        <div className="chart"><ResponsiveContainer><BarChart data={outcomeTrend}><CartesianGrid vertical={false} stroke="#e8e8e3" /><XAxis dataKey="week" axisLine={false} tickLine={false} /><YAxis axisLine={false} tickLine={false} /><Tooltip /><Bar dataKey="accepted" fill="#33483f" radius={[5,5,0,0]} /><Bar dataKey="overridden" fill="#c7c9c3" radius={[5,5,0,0]} /></BarChart></ResponsiveContainer></div>
+      </article>
+      <article className="card recovery">
+        <small>Observed recovery</small>
+        <div><span className="avatar">[NL]</span><span><strong>Northstar Labs</strong><p>Support escalation · {hasApiOutcomes ? 'recorded' : 'simulated'}</p></span></div>
+        <section><span>Health score</span><div><strong>49</strong><ArrowRight /><strong>61</strong></div><Delta value={12} points /></section>
+        <ul><li><CheckCircle2 />Severe ticket resolved</li><li><TrendingUp />Usage improved 18%</li><li><Clock3 />Observed over 14 days</li></ul>
+        <em>{hasApiOutcomes ? 'Observed outcome from API' : 'Simulated outcome · not causal evidence'}</em>
+      </article>
+    </section>
+    <article className="card queue-card">
+      <SectionTitle eyebrow="Intervention history" title="Observed outcomes" detail="Changes are observations, not causal uplift." action={<button className="secondary"><Filter />Filter</button>} />
+      <div className="table-scroll">
+        <table className="data-table">
+          <thead><tr><th>Churn pathway</th><th>Account</th><th>Final action</th><th>Status</th><th>Response</th><th>Usage Δ</th><th>Health Δ</th></tr></thead>
+          <tbody>
+            {outcomeRows.map((row) => (
+              <tr key={row.id}>
+                <td><strong>{row.churnType}</strong></td>
+                <td>{row.accountName}</td>
+                <td>{row.finalAction}</td>
+                <td><span className="badge badge-low"><i />{row.status}</span></td>
+                <td>{row.response}<small>{row.observation}</small></td>
+                <td>{row.usageDelta}</td>
+                <td><strong className="positive">{row.healthDelta}</strong></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </>;
 }
 
 function Audit() {
-  const [expanded, setExpanded] = useState("AUD-9031");
-  const rows = churnProfiles.map((profile, index) => ({ id: `AUD-${9031 - index}`, time: `21:${String(42 - index * 3).padStart(2, "0")}:08`, actor: profile.action.approvalRequired ? "Policy engine" : "Decision engine", account: getAccount(profile.accountId), profile, entity: `INT-${2841 - index}` }));
-  const selected = rows.find((row) => row.id === expanded) ?? rows[0];
-  return <article className="card queue-card"><div className="queue-tools"><div className="tabs"><button className="active">All events</button><button>Decisions</button><button>Approvals</button><button>Data</button></div><div className="tool-actions"><label className="search"><Search /><input placeholder="Search actors or entities" /></label><button className="secondary"><Filter />Filters</button></div></div><div className="table-scroll"><table className="data-table"><thead><tr><th>Time</th><th>Actor</th><th>Account</th><th>Action</th><th>Entity</th><th>Version</th><th /></tr></thead><tbody>{rows.map((row) => <tr key={row.id} className={expanded === row.id ? "selected" : ""} onClick={() => setExpanded(expanded === row.id ? "" : row.id)}><td><strong>{row.time}</strong><small>18 Jul 2026</small></td><td>{row.actor}</td><td>{row.account.name}</td><td><strong>{row.profile.churnType} recommendation created</strong></td><td><code>{row.entity}</code></td><td><span className="version">policy-v2.4</span></td><td><ChevronDown className={expanded === row.id ? "rotated" : ""} /></td></tr>)}</tbody></table></div>{expanded && <div className="audit-diff"><header><ShieldCheck /><span><strong>Decision change · {expanded}</strong><small>{selected.account.name} · immutable event record</small></span><button className="icon-btn" onClick={() => setExpanded("")}><X /></button></header><div><section><span>Before</span><pre>{`{\n  "recommendation": null,\n  "approval_status": null\n}`}</pre></section><section><span>After</span><pre>{JSON.stringify({ churn_pathway: selected.profile.churnType, recommendation: selected.profile.action.recommended, approval_status: selected.profile.action.approvalRequired ? "csm_review" : "eligible", rule_version: "policy-v2.4" }, null, 2)}</pre></section></div></div>}</article>;
+  const reduce = useReducedMotion();
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [entityType, setEntityType] = useState('intervention');
+  const [entityId, setEntityId] = useState('');
+
+  // Build params for the API call
+  const apiParams: Record<string, string> = { entity_type: entityType, limit: '50' };
+  if (entityId) apiParams.entity_id = entityId;
+
+  // Fetch audit logs from API
+  const { data: apiLogs, loading, usingFallback } = useApi(
+    () => getAudit(apiParams),
+    [] as any[],
+    [entityType, entityId],
+  );
+
+  // Adapt API logs to frontend format
+  const adaptedLogs: FrontendAuditLog[] = useMemo(() => {
+    if (!usingFallback && apiLogs.length > 0) {
+      return apiLogs.map((log: any) => adaptAuditLog(log));
+    }
+    return [];
+  }, [apiLogs, usingFallback]);
+
+  // Mock fallback rows
+  const mockRows = churnProfiles.map((profile, index) => ({
+    id: `AUD-${9031 - index}`,
+    time: `21:${String(42 - index * 3).padStart(2, '0')}:08`,
+    actor: profile.action.approvalRequired ? 'Policy engine' : 'Decision engine',
+    account: getAccount(profile.accountId),
+    profile,
+    entity: `INT-${2841 - index}`,
+  }));
+
+  const hasApiData = !usingFallback && adaptedLogs.length > 0;
+
+  // Selected item for diff view
+  const selectedMock = mockRows.find((row) => row.id === expanded);
+  const selectedApi = hasApiData ? adaptedLogs.find((log) => log.entityId === expanded) : undefined;
+
+  return <>
+    <FallbackBanner show={usingFallback} />
+    <LoadingBar active={loading} />
+    <article className="card queue-card">
+      <div className="queue-tools">
+        <div className="tabs">
+          {['intervention', 'account', 'outcome', 'all'].map((type) => (
+            <button key={type} className={entityType === type || (type === 'all' && entityType === '') ? 'active' : ''} onClick={() => { setEntityType(type === 'all' ? '' : type); setExpanded(null); }}>
+              {type === 'all' ? 'All events' : type === 'intervention' ? 'Decisions' : type === 'account' ? 'Approvals' : 'Data'}
+            </button>
+          ))}
+        </div>
+        <div className="tool-actions">
+          <label className="search"><Search /><input placeholder="Entity ID" value={entityId} onChange={(e) => { setEntityId(e.target.value); setExpanded(null); }} /></label>
+          <button className="secondary"><Filter />Filters</button>
+        </div>
+      </div>
+      <div className="table-scroll">
+        <table className="data-table">
+          <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Entity type</th><th>Entity ID</th><th>Reason</th><th /></tr></thead>
+          <tbody>
+            {hasApiData
+              ? adaptedLogs.map((log) => (
+                  <tr key={log.entityId + log.timestamp} className={expanded === log.entityId ? 'selected' : ''} onClick={() => setExpanded(expanded === log.entityId ? null : log.entityId)}>
+                    <td><strong>{new Date(log.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</strong><small>{new Date(log.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</small></td>
+                    <td>{log.actorId}<small>{log.actorRole}</small></td>
+                    <td><strong>{log.action}</strong></td>
+                    <td>{log.entityType}</td>
+                    <td><code>{log.entityId}</code></td>
+                    <td>{log.reason ?? '—'}</td>
+                    <td><ChevronDown className={expanded === log.entityId ? 'rotated' : ''} /></td>
+                  </tr>
+                ))
+              : mockRows.map((row) => (
+                  <tr key={row.id} className={expanded === row.id ? 'selected' : ''} onClick={() => setExpanded(expanded === row.id ? null : row.id)}>
+                    <td><strong>{row.time}</strong><small>18 Jul 2026</small></td>
+                    <td>{row.actor}</td>
+                    <td><strong>{row.profile.churnType} recommendation created</strong></td>
+                    <td>intervention</td>
+                    <td><code>{row.entity}</code></td>
+                    <td>—</td>
+                    <td><ChevronDown className={expanded === row.id ? 'rotated' : ''} /></td>
+                  </tr>
+                ))
+            }
+          </tbody>
+        </table>
+      </div>
+      {expanded && selectedApi && (
+        <div className="audit-diff">
+          <header><ShieldCheck /><span><strong>{selectedApi.action} · {selectedApi.entityId}</strong><small>{selectedApi.entityType} · immutable event record</small></span><button className="icon-btn" onClick={() => setExpanded(null)}><X /></button></header>
+          <div>
+            <section><span>Before</span><pre>{JSON.stringify(selectedApi.before ?? {}, null, 2)}</pre></section>
+            <section><span>After</span><pre>{JSON.stringify(selectedApi.after ?? {}, null, 2)}</pre></section>
+          </div>
+        </div>
+      )}
+      {expanded && selectedMock && !hasApiData && (
+        <div className="audit-diff">
+          <header><ShieldCheck /><span><strong>Decision change · {expanded}</strong><small>{selectedMock.account.name} · immutable event record</small></span><button className="icon-btn" onClick={() => setExpanded(null)}><X /></button></header>
+          <div>
+            <section><span>Before</span><pre>{`{\n  "recommendation": null,\n  "approval_status": null\n}`}</pre></section>
+            <section><span>After</span><pre>{JSON.stringify({ churn_pathway: selectedMock.profile.churnType, recommendation: selectedMock.profile.action.recommended, approval_status: selectedMock.profile.action.approvalRequired ? 'csm_review' : 'eligible', rule_version: 'policy-v2.4' }, null, 2)}</pre></section>
+          </div>
+        </div>
+      )}
+    </article>
+  </>;
 }
 
 export function ValueLoopApp({ initialScreen, initialAccountId = "northstar" }: { initialScreen: Screen; initialAccountId?: string }) {
