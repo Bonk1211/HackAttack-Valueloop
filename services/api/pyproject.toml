@@ -23,6 +23,10 @@ dev = [
     "ruff==0.7.4",
 ]
 
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["supabase*", "tests*"]
+
 [tool.ruff]
 line-length = 120
 target-version = "py312"
