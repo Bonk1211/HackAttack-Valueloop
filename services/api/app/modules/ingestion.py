@@ -6,7 +6,10 @@ from supabase import Client
 from app.core.errors import ValidationError
 
 def parse_csv(file_bytes: bytes) -> list[dict]:
-    text = file_bytes.decode("utf-8")
+    try:
+        text = file_bytes.decode("utf-8")
+    except UnicodeDecodeError as e:
+        raise ValidationError(f"CSV must be UTF-8 encoded: {e}")
     reader = csv.DictReader(io.StringIO(text))
     return [row for row in reader]
 

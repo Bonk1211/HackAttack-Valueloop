@@ -6,7 +6,7 @@ from app.modules.health import score_health
 from app.modules.risk import predict_risks
 
 
-def _context(db: Client, account_id: str) -> dict:
+def _context(db: Client, account_id: str, *, health=None, risks=None) -> dict:
     tickets = db.table("support_tickets").select("*").eq("account_id", account_id).execute().data
     payments = db.table("payment_events").select("*").eq("account_id", account_id).execute().data
     feedback = db.table("feedback_events").select("*").eq("account_id", account_id).execute().data
@@ -19,8 +19,10 @@ def _context(db: Client, account_id: str) -> dict:
         .execute()
         .data
     )
-    health = score_health(db, account_id)
-    risks = predict_risks(db, account_id)
+    if health is None:
+        health = score_health(db, account_id)
+    if risks is None:
+        risks = predict_risks(db, account_id)
     exp_risk = next((r for r in risks if r.risk_type == "expansion_readiness"), None)
 
     open_critical = sum(1 for t in tickets if not t.get("closed_at") and t["severity"] == "critical")
@@ -58,9 +60,15 @@ def _utility(benefit: str, friction: str, risk: str) -> float:
     return round(benefit_v - friction_v * 0.3 - risk_v * 0.3, 3)
 
 
-def recommend_actions(db: Client, account_id: str) -> list[ActionRecommendation]:
+def recommend_actions(
+    db: Client,
+    account_id: str,
+    *,
+    health=None,
+    risks=None,
+) -> list[ActionRecommendation]:
     actions = load_actions()
-    ctx = _context(db, account_id)
+    ctx = _context(db, account_id, health=health, risks=risks)
     recs = []
     for action in actions:
         eligible, rejection = check_eligibility(db, account_id, action, ctx)

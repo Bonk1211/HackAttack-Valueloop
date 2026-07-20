@@ -15,7 +15,7 @@ def _risk(risk_type, prob, conf, features=None) -> RiskPrediction:
     )
 
 
-def predict_risks(db: Client, account_id: str) -> list[RiskPrediction]:
+def predict_risks(db: Client, account_id: str, *, persist: bool = True) -> list[RiskPrediction]:
     usage = db.table("usage_events").select("*").eq("account_id", account_id).order("timestamp", desc=True).execute().data
     payments = db.table("payment_events").select("*").eq("account_id", account_id).execute().data
     tickets = db.table("support_tickets").select("*").eq("account_id", account_id).execute().data
@@ -73,6 +73,7 @@ def predict_risks(db: Client, account_id: str) -> list[RiskPrediction]:
     for p in preds:
         p.account_id = account_id
     # persist (mode="json" so datetime/etc. serialize for the postgrest HTTP layer)
-    for p in preds:
-        db.table("risk_predictions").insert(p.model_dump(mode="json")).execute()
+    if persist:
+        for p in preds:
+            db.table("risk_predictions").insert(p.model_dump(mode="json")).execute()
     return preds

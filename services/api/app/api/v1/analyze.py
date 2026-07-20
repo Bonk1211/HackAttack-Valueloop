@@ -14,7 +14,7 @@ def analyze(account_id: str, db: Client = Depends(get_db)):
     health = score_health(db, account_id)
     risks = predict_risks(db, account_id)
     causes = generate_hypotheses(db, account_id)
-    actions = recommend_actions(db, account_id)
+    actions = recommend_actions(db, account_id, health=health, risks=risks)
     return envelope(data={
         "health": health.model_dump(mode="json"),
         "risks": [r.model_dump(mode="json") for r in risks],

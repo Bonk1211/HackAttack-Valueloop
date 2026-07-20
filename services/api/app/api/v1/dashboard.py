@@ -12,9 +12,10 @@ def kpis(db: Client = Depends(get_db)):
     total = len(accounts)
 
     # Compute risks on-the-fly for all accounts (since risk_predictions is wiped between tests)
+    # Use persist=False to avoid inserting 250 rows per dashboard request.
     at_risk_ids = set()
     for account in accounts:
-        risks = predict_risks(db, account["id"])
+        risks = predict_risks(db, account["id"], persist=False)
         for r in risks:
             if r.risk_type == "cancellation" and r.probability > 0.6:
                 at_risk_ids.add(account["id"])
