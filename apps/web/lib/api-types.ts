@@ -1,0 +1,119 @@
+export interface BackendAccount {
+  id: string;
+  name: string;
+  initials: string;
+  owner_id: string;
+  plan: string;
+  segment: string;
+  industry: string;
+  arr_mrr: number;
+  start_date: string;
+  renewal_date: string;
+}
+
+export interface HealthScore {
+  adoption: number;
+  engagement: number;
+  experience: number;
+  financial: number;
+  value: number;
+  overall: number;
+  version: string;
+  generated_at: string;
+}
+
+export interface RiskPrediction {
+  account_id: string;
+  risk_type: string;
+  probability: number;
+  confidence: number;
+  top_features_json: { feature: string; value: any }[];
+  model_version: string;
+  generated_at: string;
+}
+
+export interface CauseHypothesis {
+  account_id: string;
+  cause: string;
+  rank: number;
+  confidence: number;
+  evidence_json: { reason: string; source: string; timestamp: string }[];
+  contradictions_json: { reason: string; source: string; timestamp: string }[];
+  rule_version: string;
+  generated_at: string;
+  unknown_reason: string | null;
+}
+
+export interface ActionRecommendation {
+  account_id: string;
+  action_code: string;
+  eligibility: boolean;
+  rejection_reason: string | null;
+  utility_score: number | null;
+  approval_required: boolean;
+  approval_reason: string | null;
+  benefit: string;
+  friction: string;
+  risk: string;
+  generated_at: string;
+}
+
+export interface Analysis {
+  health: HealthScore;
+  risks: RiskPrediction[];
+  causes: CauseHypothesis[];
+  actions: ActionRecommendation[];
+}
+
+export interface Intervention {
+  id: string;
+  account_id: string;
+  recommended_action: string;
+  final_action: string | null;
+  approver: string | null;
+  status: string;
+  channel: string | null;
+  reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Outcome {
+  intervention_id: string;
+  renewed: boolean | null;
+  downgraded: boolean | null;
+  churned: boolean | null;
+  usage_delta: number | null;
+  health_delta: number | null;
+  response: string | null;
+  observation: string | null;
+  recorded_at: string;
+}
+
+export interface AuditLog {
+  actor_id: string;
+  actor_role: string;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  before_json: any;
+  after_json: any;
+  timestamp: string;
+  reason: string | null;
+}
+
+export interface KPIs {
+  total_accounts: number;
+  at_risk_mrr: number;
+  intervention_acceptance_rate: number;
+  override_rate: number;
+}
+
+export interface TimelineEvent {
+  event_type: string;
+  title: string;
+  detail: string;
+  source: string;
+  tone: string;
+  timestamp: string;
+}
