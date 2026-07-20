@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from app.config import get_settings
 from app.core.errors import ApiError
 from app.core.logging import configure_logging
+from app.models.envelope import Meta
 
 
 @asynccontextmanager
@@ -28,7 +29,11 @@ def create_app() -> FastAPI:
     async def api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
         return JSONResponse(
             status_code=exc.code,
-            content={"data": None, "meta": {"version": s.api_version}, "errors": [{"code": exc.code, "message": exc.message}]},
+            content={
+                "data": None,
+                "meta": Meta(version=s.api_version).model_dump(mode="json"),
+                "errors": [{"code": exc.code, "message": exc.message}],
+            },
         )
 
     @app.get("/healthz")
