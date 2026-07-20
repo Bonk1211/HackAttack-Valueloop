@@ -6,7 +6,7 @@ ValueLoop is an explainable subscription-value intelligence and next-best-action
 
 ## Project Status
 
-The full frontend is implemented in `apps/web/` using deterministic local fixtures and deployed on Vercel. It covers Value, Experience, Product-fit, Price, Involuntary, Competitive, Lifecycle, and Silent churn from risk evidence through governed action and outcome. The Risk Queue includes graph and table views; the graph maps each account to its pathway, leading issue, evidence, and safe response. A guided demo makes the six-step solution legible to non-technical viewers, while Playbook Studio demonstrates safe no-code customization. Every screen also includes a contextual Page tutorial that spotlights and explains its actual interface elements step by step. Motion provides restrained spring entrances, state transitions, and tactile controls with reduced-motion support. Backend services, persistence, authentication, and production intelligence remain planned work.
+The frontend in `apps/web/` is mapped to the FastAPI backend and Supabase-backed synthetic dataset. It consumes live account analysis, risk history, evidence, policy decisions, governed intervention transitions, outcomes, audit logs, and ingestion jobs through typed clients and SWR caching; deterministic fixtures remain as an offline fallback. Authentication and production hardening remain planned work.
 
 **Live frontend:** [web-livid-beta-ilnxxzodh3.vercel.app](https://web-livid-beta-ilnxxzodh3.vercel.app)
 
@@ -68,7 +68,7 @@ npm ci
 npm run dev
 ```
 
-Use `npm run build` for a production build, `npm test` for route, fixture, and motion contracts, and `npm run lint` for static analysis. The mockup uses local fixtures and requires no environment variables or backend service.
+Use `npm run build`, `npm test`, `npm run lint`, and `npx tsc --noEmit` for verification. Set `NEXT_PUBLIC_API_URL` to the FastAPI `/api/v1` base URL; it defaults to `http://localhost:8000/api/v1`.
 
 ### Backend
 
@@ -96,7 +96,7 @@ pytest --cov=app
 
 See [`services/api/README.md`](services/api/README.md) for full API reference and architecture.
 
-Production routes are `/`, `/guided-demo`, `/playbooks`, `/risk-queue`, `/accounts`, `/accounts/{id}`, `/approvals`, `/outcomes`, and `/audit`. Example account IDs include `northstar`, `harborline`, `forgeworks`, `lumen`, `ember`, `cobalt`, `meridian`, and `willow`. Deploy from `apps/web/` with `vercel --prod` after signing in to the Vercel CLI.
+Production routes are `/`, `/guided-demo`, `/playbooks`, `/risk-queue`, `/accounts`, `/accounts/{id}`, `/approvals`, `/outcomes`, `/audit`, and `/data`. Example account IDs include `northstar`, `harborline`, `forgeworks`, `lumen`, `ember`, `cobalt`, `meridian`, and `willow`. Deploy from `apps/web/` with `vercel --prod` after signing in to the Vercel CLI.
 
 For current work, read these documents in order:
 

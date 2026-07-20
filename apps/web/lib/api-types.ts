@@ -27,7 +27,7 @@ export interface RiskPrediction {
   risk_type: string;
   probability: number;
   confidence: number;
-  top_features_json: { feature: string; value: any }[];
+  top_features_json: { feature: string; value: unknown }[];
   model_version: string;
   generated_at: string;
 }
@@ -52,9 +52,9 @@ export interface ActionRecommendation {
   utility_score: number | null;
   approval_required: boolean;
   approval_reason: string | null;
-  benefit: string;
-  friction: string;
-  risk: string;
+  benefit: string | null;
+  friction: string | null;
+  risk: string | null;
   generated_at: string;
 }
 
@@ -71,6 +71,23 @@ export interface Customer360Response {
   users: { id: string; name: string; role: string }[];
   freshness: Record<string, string>;
   data_quality: number;
+}
+
+export interface RiskHistoryPoint {
+  date: string;
+  risks: RiskPrediction[];
+}
+
+export interface IngestionResult {
+  job_id: string;
+  inserted: number;
+  quarantined: Array<Record<string, unknown>>;
+}
+
+export interface IngestionJob {
+  status: string;
+  rows: number;
+  quarantined: Array<Record<string, unknown>>;
 }
 
 export interface Intervention {
@@ -104,8 +121,8 @@ export interface AuditLog {
   action: string;
   entity_type: string;
   entity_id: string;
-  before_json: any;
-  after_json: any;
+  before_json: Record<string, unknown> | null;
+  after_json: Record<string, unknown> | null;
   timestamp: string;
   reason: string | null;
 }
