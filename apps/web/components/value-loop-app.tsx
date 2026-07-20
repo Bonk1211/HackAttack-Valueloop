@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
@@ -92,27 +92,66 @@ function PageTour({ screen, onClose }: { screen: Screen; onClose: () => void }) 
   const [index, setIndex] = useState(0);
   const [box, setBox] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
+  const [cardHeight, setCardHeight] = useState(0);
+  const cardRef = useRef<HTMLElement>(null);
   const reduce = useReducedMotion();
   const steps = tourSteps[screen];
   const step = steps[index];
 
   useEffect(() => {
     let frame = 0;
+    let settleFrame = 0;
+    let settleFramesRemaining = 8;
     const measure = () => {
       const target = document.querySelector<HTMLElement>(step.selector);
-      setViewport({ width: window.innerWidth, height: window.innerHeight });
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      setViewport({ width, height });
       if (!target) { setBox(null); return; }
       const rect = target.getBoundingClientRect();
-      const top = Math.max(8, rect.top - 7);
-      const left = Math.max(8, rect.left - 7);
-      setBox({ top, left, width: Math.min(window.innerWidth - left - 8, rect.width + 14), height: Math.min(window.innerHeight - top - 8, rect.height + 14) });
+      const margin = 12;
+      const padding = 7;
+      const left = Math.max(margin, rect.left - padding);
+      const top = Math.max(margin, rect.top - padding);
+      const visibleWidth = Math.max(0, Math.min(width - margin, rect.right + padding) - left);
+      const availableHeight = Math.max(0, Math.min(height - margin, rect.bottom + padding) - top);
+      const measuredCardHeight = cardHeight || (width <= 680 ? 320 : 280);
+      const roomForCardBelow = height - top - measuredCardHeight - 34;
+      const roomForCardAbove = top - measuredCardHeight - 34;
+      const preferredFocusHeight = Math.min(520, height * (width <= 680 ? 0.42 : 0.56));
+      const maxFocusHeight = roomForCardAbove >= margin ? preferredFocusHeight : Math.min(preferredFocusHeight, Math.max(120, roomForCardBelow));
+      setBox({ top, left, width: visibleWidth, height: Math.min(availableHeight, maxFocusHeight) });
     };
     const target = document.querySelector<HTMLElement>(step.selector);
-    target?.scrollIntoView({ block: "center", behavior: "auto" });
-    frame = window.requestAnimationFrame(measure);
+    if (target) {
+      const targetHeight = target.getBoundingClientRect().height;
+      target.scrollIntoView({ block: targetHeight > window.innerHeight * 0.56 ? "start" : "center", behavior: "instant" as ScrollBehavior });
+    }
+    const measureWhileSettling = () => {
+      measure();
+      settleFramesRemaining -= 1;
+      if (settleFramesRemaining > 0) settleFrame = window.requestAnimationFrame(measureWhileSettling);
+    };
+    frame = window.requestAnimationFrame(measureWhileSettling);
     window.addEventListener("resize", measure);
-    return () => { window.cancelAnimationFrame(frame); window.removeEventListener("resize", measure); };
-  }, [step.selector, reduce]);
+    const observer = target ? new ResizeObserver(measure) : null;
+    if (target && observer) observer.observe(target);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(settleFrame);
+      window.removeEventListener("resize", measure);
+      observer?.disconnect();
+    };
+  }, [step.selector, reduce, cardHeight]);
+
+  useLayoutEffect(() => {
+    if (!cardRef.current) return;
+    const updateCardHeight = () => setCardHeight(cardRef.current?.getBoundingClientRect().height ?? 0);
+    updateCardHeight();
+    const observer = new ResizeObserver(updateCardHeight);
+    observer.observe(cardRef.current);
+    return () => observer.disconnect();
+  }, [screen, index]);
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -125,16 +164,21 @@ function PageTour({ screen, onClose }: { screen: Screen; onClose: () => void }) 
   }, [onClose, steps.length]);
 
   const cardWidth = Math.min(370, Math.max(280, viewport.width - 32));
-  const cardHeight = 230;
   const cardLeft = box ? Math.max(16, Math.min(box.left, viewport.width - cardWidth - 16)) : Math.max(16, (viewport.width - cardWidth) / 2);
-  const fitsBelow = box ? box.top + box.height + cardHeight + 32 < viewport.height : true;
-  const cardTop = box ? fitsBelow ? box.top + box.height + 18 : Math.max(16, box.top - cardHeight - 18) : Math.max(16, (viewport.height - cardHeight) / 2);
+  const measuredCardHeight = cardHeight || 280;
+  const belowTop = box ? box.top + box.height + 18 : 16;
+  const aboveTop = box ? box.top - measuredCardHeight - 18 : 16;
+  const fitsBelow = belowTop + measuredCardHeight <= viewport.height - 16;
+  const fitsAbove = aboveTop >= 16;
+  const cardTop = box
+    ? fitsBelow ? belowTop : fitsAbove ? aboveTop : Math.max(16, viewport.height - measuredCardHeight - 16)
+    : Math.max(16, (viewport.height - measuredCardHeight) / 2);
 
   return <div className="tour-root" role="dialog" aria-modal="true" aria-labelledby="tour-title" aria-describedby="tour-detail">
     <button className="tour-click-shield" aria-label="Close page tutorial" onClick={onClose} />
     {box && <><motion.div className="tour-focus" initial={reduce ? false : { opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={reduce ? { duration: 0 } : spring} style={box} /><motion.span className="tour-pointer" initial={reduce ? false : { opacity: 0, scale: 0.7 }} animate={{ opacity: 1, scale: 1 }} style={{ top: Math.max(10, box.top - 14), left: Math.max(10, box.left - 14) }}><HandPointing /></motion.span></>}
-    <motion.article key={`${screen}-${index}`} className="tour-card" initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : spring} style={{ width: cardWidth, top: cardTop, left: cardLeft }}>
-      <header><span>Page tutorial · {index + 1} of {steps.length}</span><button aria-label="Close tutorial" onClick={onClose}><X /></button></header><h2 id="tour-title">{step.title}</h2><p id="tour-detail">{step.detail}</p><div className="tour-progress" aria-label={`Tutorial progress: step ${index + 1} of ${steps.length}`}>{steps.map((item, stepIndex) => <i className={stepIndex === index ? "active" : stepIndex < index ? "complete" : ""} key={item.title} />)}</div><footer><button className="text-btn" onClick={onClose}>Skip tutorial</button><div><button className="secondary" disabled={index === 0} onClick={() => setIndex(index - 1)}>Back</button><button className="primary" autoFocus onClick={() => index === steps.length - 1 ? onClose() : setIndex(index + 1)}>{index === steps.length - 1 ? "Finish" : "Next"}<ArrowRight /></button></div></footer>
+    <motion.article ref={cardRef} key={`${screen}-${index}`} className="tour-card" initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : spring} style={{ width: cardWidth, top: cardTop, left: cardLeft }}>
+      <header><span>Page tutorial · {index + 1} of {steps.length}</span><button aria-label="Close tutorial" onClick={onClose}><X /></button></header><h2 id="tour-title">{step.title}</h2><p id="tour-detail">{step.detail}</p><div className="tour-progress" aria-label={`Tutorial progress: step ${index + 1} of ${steps.length}`}>{steps.map((item, stepIndex) => <i className={stepIndex === index ? "active" : stepIndex < index ? "complete" : ""} key={item.title} />)}</div><footer><button className="text-btn" onClick={onClose}>Skip tutorial</button><div><button className="secondary" disabled={index === 0} onClick={() => setIndex(index - 1)}>Back</button><button className="primary" onClick={() => index === steps.length - 1 ? onClose() : setIndex(index + 1)}>{index === steps.length - 1 ? "Finish" : "Next"}<ArrowRight /></button></div></footer>
     </motion.article>
   </div>;
 }
