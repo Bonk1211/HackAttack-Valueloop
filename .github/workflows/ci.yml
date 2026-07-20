@@ -11,6 +11,10 @@ permissions:
 jobs:
   backend-local:
     runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: https://test.invalid
+      SUPABASE_SERVICE_ROLE_KEY: test-service-role-key
+      SUPABASE_ANON_KEY: test-anon-key
     defaults:
       run:
         working-directory: services/api

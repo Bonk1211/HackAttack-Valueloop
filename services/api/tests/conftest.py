@@ -5,6 +5,12 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+# Unit and contract tests must collect without a developer .env or CI secrets.
+# setdefault preserves real credentials when the opt-in integration suite runs.
+os.environ.setdefault("SUPABASE_URL", "https://test.invalid")
+os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
+os.environ.setdefault("SUPABASE_ANON_KEY", "test-anon-key")
+
 SEED_SCRIPT = Path(__file__).resolve().parent.parent.parent.parent / "scripts" / "seed_demo.py"
 COMPUTED_TABLES = [
     "outcomes", "audit_logs", "action_recommendations",
