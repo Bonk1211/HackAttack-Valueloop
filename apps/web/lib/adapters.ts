@@ -53,16 +53,19 @@ export function riskToSeverity(probability: number): Severity {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
-function formatMrr(value: number): string {
+function formatMrr(value: number | null | undefined): string {
+  if (value == null) return 'RM 0';
   return `RM ${value.toLocaleString('en-US')}`;
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return '—';
   const d = new Date(iso);
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function timeAgo(iso: string): string {
+function timeAgo(iso: string | null | undefined): string {
+  if (!iso) return '—';
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'just now';
