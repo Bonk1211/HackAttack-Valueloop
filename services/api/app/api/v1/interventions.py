@@ -34,6 +34,21 @@ class OutcomeRequest(BaseModel):
     observation: str | None = None
 
 
+@router.get("/interventions")
+def list_interventions(
+    status: str | None = None,
+    account_id: str | None = None,
+    db: Client = Depends(get_db),
+):
+    q = db.table("interventions").select("*")
+    if status:
+        q = q.eq("status", status)
+    if account_id:
+        q = q.eq("account_id", account_id)
+    result = q.order("created_at", desc=True).execute()
+    return envelope(data=result.data or [])
+
+
 @router.post("/interventions")
 def create(req: CreateInterventionRequest, db: Client = Depends(get_db)):
     return envelope(

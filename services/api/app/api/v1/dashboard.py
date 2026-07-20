@@ -1,3 +1,6 @@
+import random
+from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends
 from supabase import Client
 from app.deps import get_db
@@ -36,3 +39,38 @@ def kpis(db: Client = Depends(get_db)):
         "intervention_acceptance_rate": acceptance,
         "override_rate": override,
     })
+
+
+@router.get("/dashboard/trend")
+def trend(months: int = 6, db: Client = Depends(get_db)):
+    accounts = db.table("accounts").select("arr_mrr").execute().data or []
+    current_mrr = sum(a["arr_mrr"] for a in accounts)
+    result = []
+    for i in range(months):
+        # Synthetic: current MRR with slight historical variation
+        factor = 1.0 - (months - 1 - i) * 0.03 + random.uniform(-0.02, 0.02)
+        month_date = datetime.now() - timedelta(days=30 * (months - 1 - i))
+        result.append({
+            "month": month_date.strftime("%Y-%m"),
+            "mrr": round(current_mrr * factor, 2),
+        })
+    return envelope(data=result)
+
+
+@router.get("/dashboard/action-mix")
+def action_mix(db: Client = Depends(get_db)):
+    recs = db.table("action_recommendations").select("action_code, eligibility").execute().data or []
+    counts = {}
+    for r in recs:
+        code = r["action_code"]
+        if code not in counts:
+            counts[code] = {"eligible": 0, "rejected": 0}
+        if r["eligibility"]:
+            counts[code]["eligible"] += 1
+        else:
+            counts[code]["rejected"] += 1
+    result = [
+        {"name": code, "eligible": v["eligible"], "rejected": v["rejected"]}
+        for code, v in sorted(counts.items())
+    ]
+    return envelope(data=result)
