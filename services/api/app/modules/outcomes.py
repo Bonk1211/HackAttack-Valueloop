@@ -1,7 +1,11 @@
 from datetime import datetime, timezone
 from supabase import Client
 from app.models import Outcome
-from app.core.errors import NotFound
+from app.core.errors import NotFound, ValidationError
+
+# Outcome can only be recorded once a decision has been made (approved/executed)
+# or already delivered (idempotent re-record).
+OUTCOME_ELIGIBLE_STATUSES = ("approved", "executed", "delivered")
 
 
 def record_outcome(
@@ -19,6 +23,11 @@ def record_outcome(
     row = db.table("interventions").select("*").eq("id", intervention_id).maybe_single().execute()
     if not row or not row.data:
         raise NotFound("intervention", intervention_id)
+    current = row.data["status"]
+    if current not in OUTCOME_ELIGIBLE_STATUSES:
+        raise ValidationError(
+            f"Cannot record outcome for intervention in '{current}' status"
+        )
     out = Outcome(
         intervention_id=intervention_id,
         renewed=renewed,
