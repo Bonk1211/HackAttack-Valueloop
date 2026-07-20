@@ -1,0 +1,81 @@
+version: "1.0"
+actions:
+  - code: in_app_education
+    label: "Guided onboarding"
+    requires:
+      - no_severe_open_ticket
+    approval: false
+    max_per_14d: 2
+    benefit: medium
+    friction: low
+    risk: low
+
+  - code: payment_retry
+    label: "Payment retry & card update"
+    requires:
+      - payment_failure_evidence
+    approval: finance
+    max_per_30d: 3
+    benefit: high
+    friction: low
+    risk: medium
+
+  - code: support_escalation
+    label: "Support escalation"
+    requires:
+      - unresolved_high_severity_ticket
+    approval: false
+    max_per_30d: 3
+    benefit: high
+    friction: low
+    risk: low
+
+  - code: human_outreach
+    label: "Human outreach"
+    requires:
+      - contact_allowed
+    approval: csm
+    max_per_14d: 1
+    benefit: medium
+    friction: medium
+    risk: low
+
+  - code: plan_review
+    label: "Flexible plan review"
+    requires:
+      - plan_utilization_low OR price_objection
+    approval: csm
+    max_per_60d: 1
+    benefit: high
+    friction: low
+    risk: low
+
+  - code: pause_subscription
+    label: "Pause subscription"
+    requires:
+      - lifecycle_evidence
+    approval: customer
+    max_per_90d: 1
+    benefit: high
+    friction: low
+    risk: low
+
+  - code: upgrade_review
+    label: "Upgrade review"
+    requires:
+      - expansion_readiness_high
+      - experience_score_gte_70
+    approval: csm_customer
+    max_per_90d: 1
+    benefit: high
+    friction: medium
+    risk: low
+
+  - code: no_action
+    label: "No action"
+    requires: []
+    approval: false
+    max_per_30d: 999
+    benefit: low
+    friction: low
+    risk: low

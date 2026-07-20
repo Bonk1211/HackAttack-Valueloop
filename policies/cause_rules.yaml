@@ -1,0 +1,59 @@
+version: "1.0"
+causes:
+  - code: payment
+    label: "Payment"
+    trigger: "payment_failures_30d >= 2 AND subscription_status != 'cancelled'"
+    # coefficient raised from 0.10 (brief) to 0.15 — see task-8-report.md for
+    # the real-seed-data arithmetic behind this change.
+    confidence_formula: "min(0.95, 0.60 + 0.15 * payment_failures_30d)"
+    supporting_evidence: ["failed_attempts", "expiry_risk", "payment_status_past_due"]
+    contradicting_evidence: ["payments_current", "no_failures"]
+
+  - code: technical_support
+    label: "Technical / Support"
+    trigger: "open_critical_tickets >= 1 OR open_high_tickets >= 2"
+    confidence_formula: "min(0.95, 0.60 + 0.13 * open_critical_tickets + 0.07 * open_high_tickets)"
+    supporting_evidence: ["high_severity", "repeat_tickets", "long_unresolved"]
+    contradicting_evidence: ["no_tickets", "rapid_resolution"]
+
+  - code: product_fit
+    label: "Product Fit"
+    trigger: "core_feature_usage_rate < 0.4"
+    confidence_formula: "0.30 + 0.5 * (1 - core_feature_usage_rate)"
+    supporting_evidence: ["core_feature_not_used", "adoption_low_after_onboarding"]
+    contradicting_evidence: ["high_goal_completion"]
+
+  - code: price_plan_fit
+    label: "Price / Plan Fit"
+    trigger: "plan_utilization < 0.4 OR price_objection_recorded"
+    confidence_formula: "0.40 + 0.4 * (1 - plan_utilization)"
+    supporting_evidence: ["low_utilization_relative_to_plan", "price_objections"]
+    contradicting_evidence: ["near_limits", "high_value"]
+
+  - code: disengagement
+    label: "Disengagement"
+    trigger: "active_days_decline_30d > 0.4"
+    confidence_formula: "0.40 + 0.5 * active_days_decline_30d"
+    supporting_evidence: ["declining_active_days", "declining_logins"]
+    contradicting_evidence: ["stable_value_outcomes"]
+
+  - code: lifecycle
+    label: "Lifecycle"
+    trigger: "project_end_recorded OR seasonal_pause"
+    confidence_formula: "0.75"
+    supporting_evidence: ["seasonality", "temporary_pause", "project_end"]
+    contradicting_evidence: ["persistent_negative_experience"]
+
+  - code: competitive
+    label: "Competitive"
+    trigger: "competitor_named OR export_spike"
+    confidence_formula: "0.70 + 0.1 * (export_spike_ratio - 1)"
+    supporting_evidence: ["competitor_named", "exports_increased", "feature_gap"]
+    contradicting_evidence: ["long_contract_remaining"]
+
+  - code: unknown
+    label: "Unknown"
+    trigger: "no_hypothesis_above_threshold"
+    confidence_formula: "0.25"
+    supporting_evidence: []
+    contradicting_evidence: []

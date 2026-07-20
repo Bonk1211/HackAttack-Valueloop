@@ -1,0 +1,9 @@
+intervention_id,renewed,downgraded,churned,usage_delta,health_delta,response,observation,recorded_at
+int-northstar-01,true,false,false,18.0,12.0,Incident resolved,Observed over 14 days; no causal claim,2026-07-19T04:34:24.474629+00:00
+int-harborline-01,,false,false,9.0,6.0,Training accepted,Simulated 14-day observation,2026-07-18T04:34:24.474629+00:00
+int-forgeworks-01,,false,false,4.0,3.0,Workflow workshop booked,Simulated; product gap remains open,2026-07-17T04:34:24.474629+00:00
+int-lumen-01,true,true,false,0.0,4.0,Lower tier selected,Simulated downgrade; revenue impact recorded,2026-07-16T04:34:24.474629+00:00
+int-ember-01,true,false,false,0.0,9.0,Card updated,Simulated involuntary recovery,2026-07-19T04:34:24.474629+00:00
+int-cobalt-01,,,,,,Rejected by manager,No action taken; monitoring competitive signal,2026-07-15T04:34:24.474629+00:00
+int-meridian-01,true,false,false,,0.0,Pause accepted,Simulated; resume date recorded,2026-07-18T04:34:24.474629+00:00
+int-willow-01,true,false,false,3.0,2.0,Check-in opened,Observed response; no causal claim,2026-07-19T04:34:24.474629+00:00

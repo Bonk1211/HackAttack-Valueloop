@@ -29,7 +29,31 @@ test("the frontend remains fixture-only", async () => {
   ]);
   assert.match(fixtures, /Northstar Labs/);
   assert.match(source, /Rejected by policy/);
+  // Only check the component and mock-data — api.ts intentionally uses fetch
   assert.doesNotMatch(`${source}\n${fixtures}`, /fetch\(|axios|supabase/i);
+});
+
+test("lib/api.ts exports the expected API client functions", async () => {
+  const source = await readFile(new URL("lib/api.ts", root), "utf8");
+  for (const fn of [
+    "getAccounts", "getCustomer360", "getTimeline", "analyzeAccount",
+    "getDashboardKPIs", "getDashboardTrend", "getDashboardActionMix",
+    "getInterventions", "createIntervention", "transitionIntervention",
+    "recordOutcome", "getOutcomes", "getAudit", "getRiskHistory",
+  ]) {
+    assert.match(source, new RegExp(`export const ${fn}`), `missing export: ${fn}`);
+  }
+});
+
+test("lib/adapters.ts exports the expected adapter functions", async () => {
+  const source = await readFile(new URL("lib/adapters.ts", root), "utf8");
+  for (const fn of [
+    "adaptAccount", "adaptChurnProfile", "adaptKPIs",
+    "adaptTimeline", "adaptAuditLog", "causeToChurnType",
+    "scoreTone", "riskToSeverity",
+  ]) {
+    assert.match(source, new RegExp(`export function ${fn}`), `missing export: ${fn}`);
+  }
 });
 
 test("all eight churn pathways have evidence, an action, and an outcome", async () => {

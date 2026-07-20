@@ -58,6 +58,8 @@ docs/                      Supporting architecture and decisions
 
 ## Getting Started
 
+### Frontend
+
 The frontend uses Node.js 24:
 
 ```bash
@@ -67,6 +69,32 @@ npm run dev
 ```
 
 Use `npm run build` for a production build, `npm test` for route, fixture, and motion contracts, and `npm run lint` for static analysis. The mockup uses local fixtures and requires no environment variables or backend service.
+
+### Backend
+
+The backend uses Python 3.13 + FastAPI + Supabase:
+
+```bash
+cd services/api
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .[dev]
+
+# Environment
+cp .env.example .env
+# Edit .env with your Supabase URL + service_role key
+
+# Seed demo data (50 accounts, deterministic)
+python scripts/seed_demo.py
+
+# Run API
+uvicorn app.main:app --reload --port 8000
+
+# Run tests
+pytest --cov=app
+```
+
+See [`services/api/README.md`](services/api/README.md) for full API reference and architecture.
 
 Production routes are `/`, `/guided-demo`, `/playbooks`, `/risk-queue`, `/accounts`, `/accounts/{id}`, `/approvals`, `/outcomes`, and `/audit`. Example account IDs include `northstar`, `harborline`, `forgeworks`, `lumen`, `ember`, `cobalt`, `meridian`, and `willow`. Deploy from `apps/web/` with `vercel --prod` after signing in to the Vercel CLI.
 
@@ -79,10 +107,10 @@ For current work, read these documents in order:
 
 ## Delivery Roadmap
 
-1. **Initialize:** monorepo, configuration, migrations, linting, CI, local startup.
-2. **Data foundation:** schema, deterministic seeds, CSV validation, Customer 360.
-3. **Intelligence:** health scores, risk, evidence, cause hypotheses.
-4. **Decisioning:** action registry, safety policies, approvals, audit events.
+1. **Initialize:** monorepo, configuration, migrations, linting, CI, local startup. ✅
+2. **Data foundation:** schema, deterministic seeds, CSV validation, Customer 360. ✅
+3. **Intelligence:** health scores, risk, evidence, cause hypotheses. ✅
+4. **Decisioning:** action registry, safety policies, approvals, audit events. ✅
 5. **Product UI:** implement supplied design across the core screens.
 6. **Hardening and demo:** auth, fallbacks, automated tests, rehearsal, backup.
 
