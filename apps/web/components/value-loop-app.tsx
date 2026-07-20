@@ -20,16 +20,18 @@ import {
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { accounts, actionMix, churnProfiles, getChurnProfile, outcomeTrend, portfolioTrend, sourceFreshness, type Account, type Severity } from "@/lib/mock-data";
-import { useApi } from "@/lib/use-api";
 import {
-  getAccounts, getCustomer360, analyzeAccount, getTimeline, getDashboardKPIs,
-  getInterventions, createIntervention, transitionIntervention, getOutcomes, getAudit,
+  getCustomer360, createIntervention, transitionIntervention,
 } from "@/lib/api";
 import {
-  adaptAccount, adaptChurnProfile, adaptKPIs, adaptTimeline, adaptAuditLog,
-  type FrontendKPIs, type FrontendAuditLog,
+  adaptAccount, adaptChurnProfile, adaptTimeline, adaptAuditLog,
+  type FrontendAuditLog,
 } from "@/lib/adapters";
-import type { Analysis, BackendAccount, Intervention, Outcome } from "@/lib/api-types";
+import {
+  useAccounts, useCustomer360, useAnalysis, useTimeline, useKPIs,
+  useInterventions, useOutcomes, useAudit,
+} from "@/lib/use-swr";
+import type { BackendAccount, Intervention } from "@/lib/api-types";
 
 export type Screen = "overview" | "risk" | "accounts" | "account" | "approvals" | "outcomes" | "audit" | "guide" | "playbooks";
 
@@ -253,33 +255,14 @@ function ChurnIssueMap({ rows, openAccount }: { rows: Account[]; openAccount: (a
   </section>;
 }
 
-// ─── Mock fallback KPIs (match current display when API is down) ───────────────
-const MOCK_KPIS: FrontendKPIs = {
-  totalAccounts: accounts.length,
-  atRiskMrr: 'RM 48.0k',
-  acceptanceRate: '72%',
-  overrideRate: '14%',
-};
-
 function Overview({ openAccount, openRisk, openGuide, openPlaybooks }: { openAccount: (accountId: string) => void; openRisk: () => void; openGuide: () => void; openPlaybooks: () => void }) {
   const reduce = useReducedMotion();
 
   // Fetch live KPIs (falls back to mock on error)
-  const { data: kpis, loading: kpiLoading, usingFallback: kpiFallback } = useApi(
-    async () => adaptKPIs(await getDashboardKPIs()),
-    MOCK_KPIS,
-    [],
-  );
+  const { data: kpis, loading: kpiLoading, usingFallback: kpiFallback } = useKPIs();
 
   // Fetch accounts with analysis (falls back to mock on error)
-  const { data: apiAccounts, loading: accountsLoading, usingFallback: accountsFallback } = useApi(
-    async () => {
-      const raw = await getAccounts(true);
-      return raw.map((r: any) => adaptAccount(r, r.analysis));
-    },
-    accounts,
-    [],
-  );
+  const { data: apiAccounts, loading: accountsLoading, usingFallback: accountsFallback } = useAccounts(true);
 
   // Top 5 accounts sorted by risk (descending)
   const topAccounts = useMemo(
@@ -411,14 +394,7 @@ function Queue({ openAccount, directory }: { openAccount: (accountId: string) =>
   const reduce = useReducedMotion();
 
   // Fetch accounts (with analysis) from API; fall back to mock
-  const { data: apiAccounts, loading: accountsLoading, usingFallback: accountsFallback } = useApi(
-    async () => {
-      const raw = await getAccounts(true);
-      return raw.map((r: any) => adaptAccount(r, r.analysis));
-    },
-    accounts,
-    [],
-  );
+  const { data: apiAccounts, loading: accountsLoading, usingFallback: accountsFallback } = useAccounts(true);
 
   const filtered = useMemo(() => apiAccounts.filter((account) => {
     const matchesSearch = `${account.name} ${account.churnType ?? ""} ${account.riskType}`.toLowerCase().includes(search.toLowerCase());
@@ -438,25 +414,14 @@ function Customer360({ accountId, back }: { accountId: string; back: () => void 
   const reduce = useReducedMotion();
 
   // Fetch the customer 360 profile (BackendAccount shape)
-  const { data: backendAccount, loading: profileLoading, usingFallback: profileFallback } = useApi<BackendAccount | null>(
-    () => getCustomer360(accountId),
-    null,
-    [accountId],
-  );
+  const { data: backendAccount, loading: profileLoading, usingFallback: profileFallback } = useCustomer360(accountId);
 
   // Fetch analysis (health, risks, causes, actions)
-  const { data: apiAnalysis, loading: analysisLoading, usingFallback: analysisFallback } = useApi<Analysis | null>(
-    () => analyzeAccount(accountId),
-    null,
-    [accountId],
-  );
+  const { data: apiAnalysis, loading: analysisLoading, usingFallback: analysisFallback } = useAnalysis(accountId);
 
   // Fetch timeline events
-  const { data: apiTimeline, loading: timelineLoading, usingFallback: timelineFallback } = useApi<any[]>(
-    () => getTimeline(accountId),
-    [],
-    [accountId],
-  );
+  const { data: apiTimeline, loading: timelineLoading } = useTimeline(accountId);
+  const timelineFallback = apiTimeline.length === 0;
 
   // Build account + profile from API or fall back to mock
   const mockAccount = getAccount(accountId);
@@ -604,17 +569,12 @@ function Customer360({ accountId, back }: { accountId: string; back: () => void 
 
 function Approvals() {
   const reduce = useReducedMotion();
-  const [refreshKey, setRefreshKey] = useState(0);
   const [selected, setSelected] = useState(0);
   const [decision, setDecision] = useState<"pending" | "approved" | "rejected">("pending");
   const [processing, setProcessing] = useState(false);
 
   // Fetch pending interventions from API
-  const { data: interventions, loading, usingFallback } = useApi(
-    () => getInterventions('pending'),
-    [] as Intervention[],
-    [refreshKey],
-  );
+  const { data: interventions, loading, usingFallback, refresh } = useInterventions('pending');
 
   // For each intervention, fetch account details for context
   // We use the first 20 to avoid excessive parallel requests
@@ -681,7 +641,7 @@ function Approvals() {
         ...(status === 'rejected' ? { reason: 'User rejected' } : {}),
       });
       setDecision(status);
-      setRefreshKey((k) => k + 1);
+      refresh();
     } catch {
       // On error, still show the decision locally
       setDecision(status);
@@ -767,25 +727,13 @@ function Outcomes() {
   const reduce = useReducedMotion();
 
   // Fetch KPIs for acceptance/override rates
-  const { data: kpis, loading: kpiLoading, usingFallback: kpiFallback } = useApi(
-    async () => adaptKPIs(await getDashboardKPIs()),
-    MOCK_KPIS,
-    [],
-  );
+  const { data: kpis, loading: kpiLoading, usingFallback: kpiFallback } = useKPIs();
 
   // Fetch all outcomes from API
-  const { data: apiOutcomes, loading: outcomesLoading, usingFallback: outcomesFallback } = useApi(
-    () => getOutcomes(),
-    [] as Outcome[],
-    [],
-  );
+  const { data: apiOutcomes, loading: outcomesLoading, usingFallback: outcomesFallback } = useOutcomes();
 
   // Fetch all interventions to join with outcomes (for account_id, action details)
-  const { data: apiInterventions, loading: interventionsLoading, usingFallback: interventionsFallback } = useApi(
-    () => getInterventions(),
-    [] as Intervention[],
-    [],
-  );
+  const { data: apiInterventions, loading: interventionsLoading, usingFallback: interventionsFallback } = useInterventions();
 
   // Build a lookup from intervention_id → Intervention
   const interventionMap = useMemo(() => {
@@ -894,11 +842,7 @@ function Audit() {
   if (entityId) apiParams.entity_id = entityId;
 
   // Fetch audit logs from API
-  const { data: apiLogs, loading, usingFallback } = useApi(
-    () => getAudit(apiParams),
-    [] as any[],
-    [entityType, entityId],
-  );
+  const { data: apiLogs, loading, usingFallback } = useAudit(apiParams);
 
   // Adapt API logs to frontend format
   const adaptedLogs: FrontendAuditLog[] = useMemo(() => {
