@@ -1,8 +1,10 @@
 import random
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends
 from supabase import Client
+from app.core.db import new_supabase
 from app.deps import get_db
 from app.models import envelope
 from app.modules.risk import predict_risks
@@ -14,15 +16,22 @@ def kpis(db: Client = Depends(get_db)):
     accounts = db.table("accounts").select("*").execute().data or []
     total = len(accounts)
 
-    # Compute risks on-the-fly for all accounts (since risk_predictions is wiped between tests)
+    # Compute risks on-the-fly for all accounts (since risk_predictions is wiped between tests).
     # Use persist=False to avoid inserting 250 rows per dashboard request.
+    # Each account does ~4 sequential Supabase HTTP calls (~1s) — run accounts
+    # in parallel threads (I/O-bound, GIL releases during the HTTP call) so 50
+    # accounts take ~1s instead of ~50s. Each thread gets its own client: the
+    # shared client's HTTP/2 connection isn't safe under concurrent use.
+    def _cancel_risk(account_id: str) -> bool:
+        risks = predict_risks(new_supabase(), account_id, persist=False)
+        return any(r.risk_type == "cancellation" and r.probability > 0.6 for r in risks)
+
     at_risk_ids = set()
-    for account in accounts:
-        risks = predict_risks(db, account["id"], persist=False)
-        for r in risks:
-            if r.risk_type == "cancellation" and r.probability > 0.6:
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = pool.map(_cancel_risk, [a["id"] for a in accounts])
+        for account, is_at_risk in zip(accounts, results):
+            if is_at_risk:
                 at_risk_ids.add(account["id"])
-                break
 
     at_risk_mrr = sum(a["arr_mrr"] for a in accounts if a["id"] in at_risk_ids)
 

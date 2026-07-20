@@ -37,8 +37,8 @@ export interface CauseHypothesis {
   cause: string;
   rank: number;
   confidence: number;
-  evidence_json: { reason: string; source: string; timestamp: string }[];
-  contradictions_json: { reason: string; source: string; timestamp: string }[];
+  evidence_json: { feature: string; source: string }[];
+  contradictions_json: { feature: string; source: string }[];
   rule_version: string;
   generated_at: string;
   unknown_reason: string | null;
@@ -63,6 +63,14 @@ export interface Analysis {
   risks: RiskPrediction[];
   causes: CauseHypothesis[];
   actions: ActionRecommendation[];
+}
+
+export interface Customer360Response {
+  account: BackendAccount;
+  subscription: { status: string; renewal_date: string; cancel_at: string | null } | null;
+  users: { id: string; name: string; role: string }[];
+  freshness: Record<string, string>;
+  data_quality: number;
 }
 
 export interface Intervention {
@@ -109,11 +117,21 @@ export interface KPIs {
   override_rate: number;
 }
 
+export interface TrendPoint {
+  month: string;
+  mrr: number;
+}
+
+export interface ActionMixEntry {
+  name: string;
+  eligible: number;
+  rejected: number;
+}
+
 export interface TimelineEvent {
-  event_type: string;
+  kind: string;
   title: string;
-  detail: string;
-  source: string;
-  tone: string;
+  meta: string;
   timestamp: string;
+  raw?: Record<string, unknown>;
 }

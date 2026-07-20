@@ -5,12 +5,12 @@ import {
   getDashboardTrend, getDashboardActionMix,
 } from './api';
 import {
-  adaptAccount, adaptKPIs,
-  type FrontendKPIs,
+  adaptAccount, adaptKPIs, adaptTrend, adaptActionMix,
+  type FrontendKPIs, type FrontendTrendPoint, type FrontendActionMix,
 } from './adapters';
 import type { Account } from './mock-data';
 import type {
-  BackendAccount, Analysis, Intervention, Outcome, AuditLog, TimelineEvent,
+  BackendAccount, Analysis, Intervention, Outcome, AuditLog, TimelineEvent, Customer360Response,
 } from './api-types';
 import {
   accounts as mockAccounts,
@@ -60,13 +60,13 @@ export function useAccounts(includeAnalysis = false) {
 // ─── Customer 360 ───────────────────────────────────────────────────────────────
 
 export function useCustomer360(id: string | null) {
-  const { data, error, isLoading } = useSWR<BackendAccount>(
+  const { data, error, isLoading } = useSWR<Customer360Response>(
     id ? `/accounts/${id}` : null,
     () => getCustomer360(id!),
     swrOpts,
   );
   return {
-    data,
+    data: data?.account,
     loading: isLoading,
     error,
     usingFallback: !data && !isLoading,
@@ -95,12 +95,13 @@ export function useTimeline(id: string | null) {
   const { data, error, isLoading } = useSWR<TimelineEvent[]>(
     id ? `/accounts/${id}/timeline` : null,
     () => getTimeline(id!),
-    { fallbackData: [], ...swrOpts },
+    swrOpts,
   );
   return {
     data: data ?? [],
     loading: isLoading,
     error,
+    usingFallback: !data && !isLoading,
   };
 }
 
@@ -174,29 +175,33 @@ export function useAudit(params: Record<string, string> = {}) {
 // ─── Dashboard trend (at-risk MRR) ──────────────────────────────────────────────
 
 export function useTrend(months = 6) {
-  const { data, error, isLoading } = useSWR(
+  const { data, error, isLoading } = useSWR<FrontendTrendPoint[]>(
     `/dashboard/trend?months=${months}`,
-    () => getDashboardTrend(months),
+    async () => adaptTrend(await getDashboardTrend(months)),
     { fallbackData: mockTrend, ...swrOpts },
   );
   return {
     data: data ?? mockTrend,
     loading: isLoading,
     error,
+    usingFallback: !data || !!error,
   };
 }
 
 // ─── Dashboard action mix ───────────────────────────────────────────────────────
 
+const mockActionMixShaped: FrontendActionMix = { entries: mockActionMix, totalEligible: 50 };
+
 export function useActionMix() {
-  const { data, error, isLoading } = useSWR(
+  const { data, error, isLoading } = useSWR<FrontendActionMix>(
     '/dashboard/action-mix',
-    () => getDashboardActionMix(),
-    { fallbackData: mockActionMix, ...swrOpts },
+    async () => adaptActionMix(await getDashboardActionMix()),
+    { fallbackData: mockActionMixShaped, ...swrOpts },
   );
   return {
-    data: data ?? mockActionMix,
+    data: data ?? mockActionMixShaped,
     loading: isLoading,
     error,
+    usingFallback: !data || !!error,
   };
 }

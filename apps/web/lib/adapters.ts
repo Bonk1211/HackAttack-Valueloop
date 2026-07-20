@@ -9,7 +9,26 @@ import type {
   ActionRecommendation,
   HealthScore,
   RiskPrediction,
+  TrendPoint,
+  ActionMixEntry,
 } from './api-types';
+
+// ─── Action code → human-readable label (mirrors policies/actions.yaml) ──────────
+
+export const ACTION_LABELS: Record<string, string> = {
+  in_app_education: 'Guided onboarding',
+  payment_retry: 'Payment retry & card update',
+  support_escalation: 'Support escalation',
+  human_outreach: 'Human outreach',
+  plan_review: 'Flexible plan review',
+  pause_subscription: 'Pause subscription',
+  upgrade_review: 'Upgrade review',
+  no_action: 'No action',
+};
+
+export function actionLabel(code: string): string {
+  return ACTION_LABELS[code] ?? code.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+}
 
 // ─── Cause code → human-readable churn type ───────────────────────────────────
 
@@ -106,19 +125,58 @@ function healthToTuples(h: HealthScore): HealthTuple[] {
 
 // ─── Backend cause → frontend CauseHypothesis ──────────────────────────────────
 
-function adaptEvidence(items: { reason: string; source: string; timestamp: string }[]): EvidenceItem[] {
-  return items.map((e) => ({ text: e.reason, source: e.source, timestamp: e.timestamp }));
+// Human-readable text for each evidence feature code (mirrors policies/cause_rules.yaml,
+// whose supporting_evidence/contradicting_evidence lists are snake_case codes with no
+// prose — the frontend needs a sentence, not "competitor_named").
+const EVIDENCE_LABELS: Record<string, string> = {
+  failed_attempts: 'Recent payment attempts have failed',
+  expiry_risk: 'Card on file is near expiry',
+  payment_status_past_due: 'Subscription payment is past due',
+  payments_current: 'Payments are current',
+  no_failures: 'No recent payment failures',
+  high_severity: 'Open high-severity support tickets',
+  repeat_tickets: 'Repeat support tickets on the same issue',
+  long_unresolved: 'Tickets have remained unresolved for an extended period',
+  no_tickets: 'No open support tickets',
+  rapid_resolution: 'Recent tickets resolved quickly',
+  core_feature_not_used: 'Core workflow feature is not being used',
+  adoption_low_after_onboarding: 'Adoption remained low after onboarding',
+  high_goal_completion: 'Success-plan goals are being completed',
+  low_utilization_relative_to_plan: 'Usage is low relative to the current plan',
+  price_objections: 'Price objections recorded in feedback',
+  near_limits: 'Usage is near current plan limits',
+  high_value: 'Account is realizing high value from the plan',
+  declining_active_days: 'Active usage days have declined',
+  declining_logins: 'Login frequency has declined',
+  stable_value_outcomes: 'Value outcomes have remained stable',
+  seasonality: 'Usage pattern matches a seasonal dip',
+  temporary_pause: 'Account activity matches a temporary pause',
+  project_end: 'Signals match a completed project lifecycle',
+  persistent_negative_experience: 'Negative experience signals persist',
+  competitor_named: 'A named competitor was mentioned in feedback',
+  exports_increased: 'Data export activity has spiked',
+  feature_gap: 'A confirmed feature gap was raised',
+  long_contract_remaining: 'Significant contract term remains',
+};
+
+function evidenceLabel(feature: string): string {
+  return EVIDENCE_LABELS[feature] ?? feature.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+}
+
+function adaptEvidence(items: { feature: string; source: string }[], timestamp: string): EvidenceItem[] {
+  return items.map((e) => ({ text: evidenceLabel(e.feature), source: e.source.replace(/\b\w/g, (l) => l.toUpperCase()), timestamp }));
 }
 
 function adaptCause(c: BackendCause): CauseHypothesis {
   const conf = c.confidence;
   const strength = conf >= 0.7 ? 'Strong evidence' : conf >= 0.4 ? 'Moderate evidence' : 'Weak evidence';
+  const timestamp = timeAgo(c.generated_at);
   return {
     label: c.cause.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
     confidence: conf,
     strength,
-    supporting: adaptEvidence(c.evidence_json),
-    contradicting: adaptEvidence(c.contradictions_json),
+    supporting: adaptEvidence(c.evidence_json, timestamp),
+    contradicting: adaptEvidence(c.contradictions_json, timestamp),
   };
 }
 
@@ -149,7 +207,9 @@ function adaptAction(a: ActionRecommendation): ActionPolicy {
 // ─── Main adapters ──────────────────────────────────────────────────────────────
 
 export function adaptAccount(backend: BackendAccount, analysis?: Analysis): Account {
-  const risk = analysis ? (topRisk(analysis.risks)?.probability ?? 0) : 0;
+  // topRisk().probability is a 0-1 fraction from the backend; the frontend's
+  // Account/ChurnProfile types (and riskToSeverity's thresholds) expect 0-100.
+  const riskPct = analysis ? Math.round((topRisk(analysis.risks)?.probability ?? 0) * 100) : 0;
   const top = analysis ? topRisk(analysis.risks) : undefined;
   const action = analysis ? eligibleAction(analysis.actions) : undefined;
   const topCause = analysis && analysis.causes.length > 0
@@ -165,10 +225,10 @@ export function adaptAccount(backend: BackendAccount, analysis?: Analysis): Acco
     segment: backend.segment,
     industry: backend.industry,
     mrr: formatMrr(backend.arr_mrr),
-    risk: Math.round(risk * 100) / 100,
+    risk: riskPct,
     riskType: top?.risk_type ?? '',
     churnType: topCause ? (causeToChurnType(topCause.cause) as ChurnType) : undefined,
-    severity: riskToSeverity(risk),
+    severity: riskToSeverity(riskPct),
     health: analysis ? analysis.health.overall : 0,
     delta: 0,
     renewal: formatDate(backend.renewal_date),
@@ -184,14 +244,15 @@ export function adaptChurnProfile(analysis: Analysis, account: BackendAccount): 
   const action = eligibleAction(analysis.actions);
 
   const churnType = topCause ? (causeToChurnType(topCause.cause) as ChurnType) : 'Silent churn';
+  const probabilityPct = top ? Math.round(top.probability * 100) : 0;
 
   return {
     accountId: account.id,
     churnType,
     riskLabel: top?.risk_type ?? '',
-    probability: top ? top.probability : 0,
+    probability: probabilityPct,
     riskDelta: 0,
-    summary: `Risk score ${Math.round((top?.probability ?? 0) * 100)}% based on ${analysis.causes.length} hypotheses.`,
+    summary: `Risk score ${probabilityPct}% based on ${analysis.causes.length} hypotheses.`,
     health: healthToTuples(analysis.health),
     riskHistory: [],
     causes: sortedCauses.map(adaptCause),
@@ -234,15 +295,33 @@ export interface FrontendTimelineEvent {
   meta: string;
 }
 
+const KIND_LABELS: Record<string, string> = {
+  usage: 'Product', support: 'Support', payment: 'Billing', feedback: 'Feedback',
+};
+
+function timelineTone(e: TimelineEvent): FrontendTimelineEvent['tone'] {
+  const raw = e.raw ?? {};
+  if (e.kind === 'support') {
+    const severity = raw.severity;
+    if (severity === 'critical' || severity === 'high') return 'critical';
+    if (severity === 'medium') return 'warning';
+    return 'blue';
+  }
+  if (e.kind === 'payment') {
+    return raw.status === 'failed' ? 'critical' : 'positive';
+  }
+  if (e.kind === 'feedback') {
+    return raw.sentiment === 'negative' ? 'warning' : 'positive';
+  }
+  return 'blue';
+}
+
 export function adaptTimeline(events: TimelineEvent[]): FrontendTimelineEvent[] {
-  return events.map((e) => {
-    const tone = (['critical', 'warning', 'positive', 'blue'].includes(e.tone) ? e.tone : 'blue') as FrontendTimelineEvent['tone'];
-    return {
-      tone,
-      title: e.title,
-      meta: `${e.source} · ${e.timestamp}`,
-    };
-  });
+  return events.map((e) => ({
+    tone: timelineTone(e),
+    title: `${KIND_LABELS[e.kind] ?? e.kind}: ${e.title}`,
+    meta: `${KIND_LABELS[e.kind] ?? e.kind} · ${e.meta} · ${e.timestamp}`,
+  }));
 }
 
 export interface FrontendAuditLog {
@@ -268,5 +347,55 @@ export function adaptAuditLog(backend: AuditLog): FrontendAuditLog {
     after: backend.after_json,
     timestamp: backend.timestamp,
     reason: backend.reason,
+  };
+}
+
+// ─── Dashboard trend (portfolio MRR chart) ───────────────────────────────────────
+
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+export interface FrontendTrendPoint {
+  month: string;
+  mrr: number;
+}
+
+export function adaptTrend(points: TrendPoint[]): FrontendTrendPoint[] {
+  return points.map((p) => {
+    const [, monthStr] = p.month.split('-');
+    const label = MONTH_ABBR[Number(monthStr) - 1] ?? p.month;
+    return { month: label, mrr: Math.round(p.mrr / 1000) };
+  });
+}
+
+// ─── Dashboard action mix (donut) ────────────────────────────────────────────────
+
+const ACTION_MIX_COLORS = [
+  '#33483f', '#6f8a6f', '#8b7b65', '#b97a35', '#718078', '#c9c7bf', '#4a6670', '#a45c5c',
+];
+
+export interface FrontendActionMixEntry {
+  name: string;
+  value: number;
+  fill: string;
+}
+
+export interface FrontendActionMix {
+  entries: FrontendActionMixEntry[];
+  totalEligible: number;
+}
+
+export function adaptActionMix(entries: ActionMixEntry[]): FrontendActionMix {
+  const totalEligible = entries.reduce((sum, e) => sum + e.eligible, 0);
+  const denom = totalEligible || 1;
+  return {
+    totalEligible,
+    entries: entries
+      .filter((e) => e.eligible > 0)
+      .sort((a, b) => b.eligible - a.eligible)
+      .map((e, i) => ({
+        name: actionLabel(e.name),
+        value: Math.round((e.eligible / denom) * 100),
+        fill: ACTION_MIX_COLORS[i % ACTION_MIX_COLORS.length],
+      })),
   };
 }

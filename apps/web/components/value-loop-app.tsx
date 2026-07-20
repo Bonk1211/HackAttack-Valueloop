@@ -29,7 +29,7 @@ import {
 } from "@/lib/adapters";
 import {
   useAccounts, useCustomer360, useAnalysis, useTimeline, useKPIs,
-  useInterventions, useOutcomes, useAudit,
+  useInterventions, useOutcomes, useAudit, useTrend, useActionMix,
 } from "@/lib/use-swr";
 import type { BackendAccount, Intervention } from "@/lib/api-types";
 
@@ -68,6 +68,23 @@ const headings: Record<Screen, [string, string, string]> = {
 const churnTabs = ["All", "Urgent", "Value", "Experience", "Product-fit", "Price", "Involuntary", "Competitive", "Lifecycle", "Silent"];
 const riskDays = ["12 Jul", "13 Jul", "14 Jul", "15 Jul", "16 Jul", "17 Jul", "18 Jul"];
 const getAccount = (accountId: string) => accounts.find((account) => account.id === accountId) ?? accounts[0];
+const formatMrrK = (value: number) => `RM ${Math.round(value / 1000)}k`;
+const median = (values: number[]) => {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+};
+const freshnessMinutes = (label: string): number => {
+  const match = label.match(/^(\d+)\s*(min|hr|day)/);
+  if (!match) return 0;
+  const n = Number(match[1]);
+  return match[2] === "min" ? n : match[2] === "hr" ? n * 60 : n * 1440;
+};
+const formatMinutes = (mins: number): string => {
+  if (mins < 60) return `${mins} min`;
+  if (mins < 1440) return `${Math.round(mins / 60)} hr`;
+  return `${Math.round(mins / 1440)} d`;
+};
 const timelineIcons = { critical: AlertCircle, warning: TrendingDown, positive: CheckCircle2, blue: Activity } as const;
 const spring = { type: "spring" as const, stiffness: 260, damping: 28, mass: 0.8 };
 
@@ -264,9 +281,19 @@ function Overview({ openAccount, openRisk, openGuide, openPlaybooks }: { openAcc
   // Fetch accounts with analysis (falls back to mock on error)
   const { data: apiAccounts, loading: accountsLoading, usingFallback: accountsFallback } = useAccounts(true);
 
+  // Fetch live portfolio trend and action mix (falls back to mock on error)
+  const { data: trend } = useTrend(6);
+  const { data: actionMixData } = useActionMix();
+
   // Top 5 accounts sorted by risk (descending)
   const topAccounts = useMemo(
     () => [...apiAccounts].sort((a, b) => b.risk - a.risk).slice(0, 5),
+    [apiAccounts],
+  );
+
+  // Data freshness: share of accounts with a completed analysis snapshot
+  const dataFreshness = useMemo(
+    () => apiAccounts.length ? Math.round((apiAccounts.filter((a) => a.health > 0).length / apiAccounts.length) * 1000) / 10 : 0,
     [apiAccounts],
   );
 
@@ -298,7 +325,7 @@ function Overview({ openAccount, openRisk, openGuide, openPlaybooks }: { openAcc
       <Kpi index={0} label="At-risk MRR" value={kpis.atRiskMrr} delta={12.4} note="Across eight churn pathways" icon={CircleDollarSign} tone="blue" />
       <Kpi index={1} label="High-risk accounts" value={String(highRiskCount)} delta={3} note="Seven require governed review" icon={AlertCircle} tone="amber" />
       <Kpi index={2} label="Action acceptance" value={kpis.acceptanceRate} delta={8.1} note="Last 30 days" icon={ThumbsUp} tone="green" />
-      <Kpi index={3} label="Data freshness" value="98.2%" delta={1.3} note="All core sources healthy" icon={Database} tone="violet" />
+      <Kpi index={3} label="Data freshness" value={`${dataFreshness}%`} delta={1.3} note="Accounts with a completed analysis" icon={Database} tone="violet" />
     </section>
     <RevealSection className="overview-grid" delay={0.05}>
       <article className="card table-card"><SectionTitle eyebrow="Priority queue" title="Accounts needing attention" action={<motion.button whileHover={reduce ? undefined : { x: 3 }} whileTap={reduce ? undefined : { scale: 0.98 }} className="text-btn" onClick={openRisk}>View risk queue <ArrowRight /></motion.button>} /><AccountTable rows={topAccounts} selected={selected.id} onSelect={setSelected} compact /></article>
@@ -306,13 +333,13 @@ function Overview({ openAccount, openRisk, openGuide, openPlaybooks }: { openAcc
         <header className="ticket-head"><div className="insight-label"><span>{selectedProfile.churnType}</span><span>Case {String(churnProfiles.indexOf(selectedProfile) + 1).padStart(3, "0")}</span></div><div className="insight-account"><Avatar account={selected} /><span><strong>{selected.name}</strong><small>{selected.plan} · {selected.mrr} MRR</small></span></div></header>
         <div className="insight-risk"><div><span>{selectedProfile.riskLabel} risk</span><Badge severity={selected.severity} /></div><strong>{selectedProfile.probability}<small>%</small></strong></div>
         <div className="hypotheses"><small>Likely causes</small>{selectedProfile.causes.slice(0, 2).map((hypothesis) => <div className="ticket-hypothesis" key={hypothesis.label}><span>{hypothesis.label}</span><b>{hypothesis.confidence.toFixed(2)}</b><i><b style={{ width: `${hypothesis.confidence * 100}%` }} /></i></div>)}</div>
-        <ul>{selectedProfile.causes[0].supporting.slice(0, 3).map((evidence) => <li key={evidence.text}><Activity />{evidence.text}</li>)}</ul>
+        <ul>{selectedProfile.causes[0].supporting.slice(0, 3).map((evidence, index) => <li key={`${evidence.text}-${index}`}><Activity />{evidence.text}</li>)}</ul>
         <div className="ticket-stub"><div className="insight-action"><small>Admit one next action</small><strong>{selectedProfile.action.recommended}</strong><span>{selectedProfile.action.rejected[0].name} rejected · {selectedProfile.action.rejected[0].reason}</span></div><motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} transition={spring} className="primary light" onClick={() => openAccount(selected.id)}>Open Customer 360 <ArrowRight /></motion.button><code aria-hidden="true">VL-{selected.renewal.slice(0, 2)}-{selected.initials}</code></div>
       </motion.aside></AnimatePresence>
     </RevealSection>
     <RevealSection className="chart-grid" delay={0.08}>
-      <article className="card chart-card wide"><SectionTitle eyebrow="Portfolio movement" title="At-risk MRR trend" detail="RM 48.0k is currently exposed across the eight seeded pathways." action={<button className="period">Last 6 months <ChevronDown /></button>} /><div className="chart"><ResponsiveContainer><AreaChart data={portfolioTrend} margin={{ top: 10, right: 8, left: -20 }}><CartesianGrid vertical={false} stroke="#e8e8e3" /><XAxis dataKey="month" axisLine={false} tickLine={false} /><YAxis axisLine={false} tickLine={false} tickFormatter={v => `${v}k`} /><Tooltip /><Area dataKey="mrr" name="At-risk MRR (RM k)" stroke="#33483f" strokeWidth={2.5} fill="#e8eee9" /></AreaChart></ResponsiveContainer></div></article>
-      <article className="card chart-card"><SectionTitle eyebrow="Recommendations" title="Action mix" detail="Safe, eligible actions this month." /><div className="donut"><div className="donut-chart"><ResponsiveContainer><PieChart><Pie data={actionMix} dataKey="value" innerRadius={46} outerRadius={70} paddingAngle={3}>{actionMix.map(x => <Cell key={x.name} fill={x.fill} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><span><strong>50</strong><small>actions</small></span></div><div className="legend">{actionMix.map(x => <div key={x.name}><i style={{ background: x.fill }} /><span>{x.name}</span><strong>{x.value}%</strong></div>)}</div></div></article>
+      <article className="card chart-card wide"><SectionTitle eyebrow="Portfolio movement" title="Portfolio MRR trend" detail={`${kpis.atRiskMrr} is currently at risk across the portfolio.`} action={<button className="period">Last 6 months <ChevronDown /></button>} /><div className="chart"><ResponsiveContainer><AreaChart data={trend} margin={{ top: 10, right: 8, left: -20 }}><CartesianGrid vertical={false} stroke="#e8e8e3" /><XAxis dataKey="month" axisLine={false} tickLine={false} /><YAxis axisLine={false} tickLine={false} tickFormatter={v => `${v}k`} /><Tooltip /><Area dataKey="mrr" name="Portfolio MRR (RM k)" stroke="#33483f" strokeWidth={2.5} fill="#e8eee9" /></AreaChart></ResponsiveContainer></div></article>
+      <article className="card chart-card"><SectionTitle eyebrow="Recommendations" title="Action mix" detail="Safe, eligible actions this month." /><div className="donut"><div className="donut-chart"><ResponsiveContainer><PieChart><Pie data={actionMixData.entries} dataKey="value" innerRadius={46} outerRadius={70} paddingAngle={3}>{actionMixData.entries.map(x => <Cell key={x.name} fill={x.fill} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer><span><strong>{actionMixData.totalEligible}</strong><small>actions</small></span></div><div className="legend">{actionMixData.entries.map(x => <div key={x.name}><i style={{ background: x.fill }} /><span>{x.name}</span><strong>{x.value}%</strong></div>)}</div></div></article>
     </RevealSection>
   </>;
 }
@@ -402,11 +429,17 @@ function Queue({ openAccount, directory }: { openAccount: (accountId: string) =>
     const matchesRiskTab = tab === "All" || tab === "Urgent" && account.risk >= 68 || account.churnType?.startsWith(tab);
     return matchesSearch && (directory ? matchesDirectoryTab : matchesRiskTab);
   }), [apiAccounts, directory, search, tab]);
+
+  // Directory mini-KPIs, derived from the live account list (RM strings parsed back to numbers)
+  const managedMrr = useMemo(() => apiAccounts.reduce((sum, a) => sum + (Number(a.mrr.replace(/[^0-9.]/g, '')) || 0), 0), [apiAccounts]);
+  const profilesComplete = useMemo(() => apiAccounts.length ? Math.round((apiAccounts.filter((a) => a.health > 0).length / apiAccounts.length) * 100) : 0, [apiAccounts]);
+  const urgentCount = useMemo(() => apiAccounts.filter((a) => a.risk >= 68).length, [apiAccounts]);
+
   return <>
     <FallbackBanner show={accountsFallback} />
     <LoadingBar active={accountsLoading} />
-    {directory && <section className="mini-kpis"><div><Users /><span><strong>{apiAccounts.length}</strong><small>Active accounts</small></span></div><div><CircleDollarSign /><span><strong>RM 284k</strong><small>Managed MRR</small></span></div><div><BadgeCheck /><span><strong>94%</strong><small>Profiles complete</small></span></div><div><Clock3 /><span><strong>12 min</strong><small>Median freshness</small></span></div></section>}
-    <motion.article initial={reduce ? false : { opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : spring} className="card queue-card"><div className="queue-tools"><div className="tabs">{(directory ? ["All", "Enterprise", "Growth", "Team", "Healthy"] : churnTabs).map(x => <motion.button whileTap={reduce ? undefined : { scale: 0.96 }} className={tab === x ? "active" : ""} onClick={() => setTab(x)} key={x}>{x}{x === "Urgent" && <b>5</b>}</motion.button>)}</div><div className="tool-actions">{!directory && <div className="view-switch" aria-label="Queue view"><motion.button layout whileTap={reduce ? undefined : { scale: 0.94 }} aria-pressed={view === "graph"} className={view === "graph" ? "active" : ""} onClick={() => setView("graph")}><LayoutDashboard />Graph</motion.button><motion.button layout whileTap={reduce ? undefined : { scale: 0.94 }} aria-pressed={view === "table"} className={view === "table" ? "active" : ""} onClick={() => setView("table")}><Menu />Table</motion.button></div>}<label className="search"><Search /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search accounts or churn types" /></label><button className="secondary"><Filter />Filters</button></div></div>{!directory && <div className="filter-row"><span>Pathway: {tab}</span><span>Renewal: 90 days</span><span>Freshness: Current</span><button onClick={() => setTab("All")}>Clear all</button></div>}<AnimatePresence mode="wait" initial={false}><motion.div key={directory ? "directory" : view} initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={reduce ? undefined : { opacity: 0, y: -6 }} transition={reduce ? { duration: 0 } : { duration: 0.18 }}>{!directory && view === "graph" ? <ChurnIssueMap rows={filtered} openAccount={openAccount} /> : <AccountTable rows={filtered} onSelect={(account) => openAccount(account.id)} />}</motion.div></AnimatePresence><footer className="table-footer"><span>Showing {filtered.length} of {apiAccounts.length} accounts · {directory ? "directory" : `${view} view`}</span><div><button disabled><ArrowLeft />Previous</button><button>Next<ArrowRight /></button></div></footer></motion.article>
+    {directory && <section className="mini-kpis"><div><Users /><span><strong>{apiAccounts.length}</strong><small>Active accounts</small></span></div><div><CircleDollarSign /><span><strong>{formatMrrK(managedMrr)}</strong><small>Managed MRR</small></span></div><div><BadgeCheck /><span><strong>{profilesComplete}%</strong><small>Profiles complete</small></span></div><div><Clock3 /><span><strong>{apiAccounts.length ? formatMinutes(median(apiAccounts.map((a) => freshnessMinutes(a.freshness)))) : '—'}</strong><small>Median account age</small></span></div></section>}
+    <motion.article initial={reduce ? false : { opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : spring} className="card queue-card"><div className="queue-tools"><div className="tabs">{(directory ? ["All", "Enterprise", "Growth", "Team", "Healthy"] : churnTabs).map(x => <motion.button whileTap={reduce ? undefined : { scale: 0.96 }} className={tab === x ? "active" : ""} onClick={() => setTab(x)} key={x}>{x}{x === "Urgent" && <b>{urgentCount}</b>}</motion.button>)}</div><div className="tool-actions">{!directory && <div className="view-switch" aria-label="Queue view"><motion.button layout whileTap={reduce ? undefined : { scale: 0.94 }} aria-pressed={view === "graph"} className={view === "graph" ? "active" : ""} onClick={() => setView("graph")}><LayoutDashboard />Graph</motion.button><motion.button layout whileTap={reduce ? undefined : { scale: 0.94 }} aria-pressed={view === "table"} className={view === "table" ? "active" : ""} onClick={() => setView("table")}><Menu />Table</motion.button></div>}<label className="search"><Search /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search accounts or churn types" /></label><button className="secondary"><Filter />Filters</button></div></div>{!directory && <div className="filter-row"><span>Pathway: {tab}</span><button onClick={() => setTab("All")}>Clear all</button></div>}<AnimatePresence mode="wait" initial={false}><motion.div key={directory ? "directory" : view} initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={reduce ? undefined : { opacity: 0, y: -6 }} transition={reduce ? { duration: 0 } : { duration: 0.18 }}>{!directory && view === "graph" ? <ChurnIssueMap rows={filtered} openAccount={openAccount} /> : <AccountTable rows={filtered} onSelect={(account) => openAccount(account.id)} />}</motion.div></AnimatePresence><footer className="table-footer"><span>Showing {filtered.length} of {apiAccounts.length} accounts · {directory ? "directory" : `${view} view`}</span><div><button disabled><ArrowLeft />Previous</button><button>Next<ArrowRight /></button></div></footer></motion.article>
   </>;
 }
 
@@ -420,8 +453,7 @@ function Customer360({ accountId, back }: { accountId: string; back: () => void 
   const { data: apiAnalysis, loading: analysisLoading, usingFallback: analysisFallback } = useAnalysis(accountId);
 
   // Fetch timeline events
-  const { data: apiTimeline, loading: timelineLoading } = useTimeline(accountId);
-  const timelineFallback = apiTimeline.length === 0;
+  const { data: apiTimeline, loading: timelineLoading, usingFallback: timelineFallback } = useTimeline(accountId);
 
   // Build account + profile from API or fall back to mock
   const mockAccount = getAccount(accountId);
@@ -443,6 +475,25 @@ function Customer360({ accountId, back }: { accountId: string; back: () => void 
 
   const showFallback = profileFallback || analysisFallback || timelineFallback;
   const isLoading = profileLoading || analysisLoading || timelineLoading;
+
+  // Real provenance stamps from the analysis response; fall back to the
+  // fixture values only when running on mock data.
+  const topCauseRaw = apiAnalysis && apiAnalysis.causes.length > 0
+    ? [...apiAnalysis.causes].sort((a, b) => a.rank - b.rank)[0]
+    : undefined;
+  const provenance = apiAnalysis ? {
+    agent: 'decision-engine-v1.0',
+    policy: 'policy-v1.0',
+    ruleVersion: topCauseRaw?.rule_version ?? '1.0',
+    generatedAt: new Date(apiAnalysis.health.generated_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    modelVersion: apiAnalysis.risks[0]?.model_version ?? '1.0',
+  } : {
+    agent: 'decision-agent-v0.1',
+    policy: 'policy-v2.4',
+    ruleVersion: 'cause-v1.5',
+    generatedAt: '18 Jul 2026, 21:42',
+    modelVersion: '1.0',
+  };
 
   const [metric, setMetric] = useState(profile.riskLabel); const [cause, setCause] = useState(profile.causes[0].label);
   const [reviewStatus, setReviewStatus] = useState<"pending" | "approved" | "modified" | "rejected">("pending");
@@ -528,10 +579,10 @@ function Customer360({ accountId, back }: { accountId: string; back: () => void 
       <SectionTitle eyebrow="Bounded agent run" title="Analysis and decision state" detail="The model recommends inside a deterministic policy and human approval boundary." action={<span className={cx("run-status", reviewStatus)}>{reviewStatus === "pending" ? "Waiting for review" : reviewStatus === "rejected" ? "Stopped safely" : "Decision recorded"}</span>} />
       <div className="agent-run-layout">
         <ol className="agent-steps" aria-label="Agent run progress">{agentSteps.map((step, index) => <li className={step.state} key={step.label}><span>{step.state === "complete" ? <Check /> : step.state === "current" ? <Clock3 /> : step.state === "halted" ? <X /> : index + 1}</span><div><strong>{step.label}</strong><small>{step.state === "complete" ? "Complete" : step.state === "current" ? "Current checkpoint" : step.state === "halted" ? "Skipped after rejection" : "Not started"}</small></div></li>)}</ol>
-        <aside className="agent-decision-summary"><header><span>Structured decision</span><strong>{confidence}% confidence</strong></header><h3>{profile.action.recommended}</h3><p>{profile.action.explanation}</p><div className="evidence-ids"><small>Supporting evidence</small>{profile.causes[0].supporting.slice(0, 3).map((item, index) => <span key={item.text}><code>{profile.accountId}-ev-{index + 1}</code>{item.text}</span>)}</div><dl><div><dt>Agent</dt><dd>decision-agent-v0.1</dd></div><div><dt>Policy</dt><dd>policy-v2.4</dd></div><div><dt>Analyzed</dt><dd>18 Jul 2026, 21:42</dd></div><div><dt>Approval</dt><dd>{profile.action.approvalRequired ? "CSM required" : "Not required"}</dd></div></dl></aside>
+        <aside className="agent-decision-summary"><header><span>Structured decision</span><strong>{confidence}% confidence</strong></header><h3>{profile.action.recommended}</h3><p>{profile.action.explanation}</p><div className="evidence-ids"><small>Supporting evidence</small>{profile.causes[0].supporting.slice(0, 3).map((item, index) => <span key={`${item.text}-${index}`}><code>{profile.accountId}-ev-{index + 1}</code>{item.text}</span>)}</div><dl><div><dt>Agent</dt><dd>{provenance.agent}</dd></div><div><dt>Policy</dt><dd>{provenance.policy}</dd></div><div><dt>Analyzed</dt><dd>{provenance.generatedAt}</dd></div><div><dt>Approval</dt><dd>{profile.action.approvalRequired ? "CSM required" : "Not required"}</dd></div></dl></aside>
       </div>
     </motion.article>
-    <RevealSection className="decision-grid"><motion.article initial={reduce ? false : { opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={reduce ? { duration: 0 } : spring} className="cause-panel"><div className="insight-label">Explain · Cause hypotheses <ShieldCheck /></div><h2>Why is value deteriorating?</h2><p>Transparent rules rank likely explanations. These are hypotheses, not verified causes.</p><div className="cause-body"><div className="cause-list">{profile.causes.map((hypothesis, index) => <motion.button whileHover={reduce ? undefined : { x: 2 }} whileTap={reduce ? undefined : { scale: 0.985 }} transition={spring} className={selectedCause.label === hypothesis.label ? "active" : ""} onClick={() => setCause(hypothesis.label)} key={hypothesis.label}><b>{String(index + 1).padStart(2, "0")}</b><span><strong>{hypothesis.label}</strong><small>{hypothesis.strength}</small></span><em>{hypothesis.confidence.toFixed(2)}</em></motion.button>)}</div><AnimatePresence mode="wait" initial={false}><motion.div key={selectedCause.label} className="evidence" initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={reduce ? undefined : { opacity: 0, y: -6 }} transition={reduce ? { duration: 0 } : { duration: 0.18 }}><div className="support"><h3><CheckCircle2 />Supporting evidence</h3>{selectedCause.supporting.map((item) => <p key={item.text}><strong>{item.text}</strong><span>{item.source} · {item.timestamp}</span></p>)}</div><div className="contradict"><h3><XCircle />Contradictory evidence</h3>{selectedCause.contradicting.length ? selectedCause.contradicting.map((item) => <p key={item.text}><strong>{item.text}</strong><span>{item.source} · {item.timestamp}</span></p>) : <p><strong>No contradiction recorded</strong><span>Rule engine · current run</span></p>}</div></motion.div></AnimatePresence></div><footer><span>Rule <strong>cause-v1.5</strong></span><span>Generated <strong>21:42</strong></span><span>Threshold <strong>0.45</strong></span></footer></motion.article>
+    <RevealSection className="decision-grid"><motion.article initial={reduce ? false : { opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={reduce ? { duration: 0 } : spring} className="cause-panel"><div className="insight-label">Explain · Cause hypotheses <ShieldCheck /></div><h2>Why is value deteriorating?</h2><p>Transparent rules rank likely explanations. These are hypotheses, not verified causes.</p><div className="cause-body"><div className="cause-list">{profile.causes.map((hypothesis, index) => <motion.button whileHover={reduce ? undefined : { x: 2 }} whileTap={reduce ? undefined : { scale: 0.985 }} transition={spring} className={selectedCause.label === hypothesis.label ? "active" : ""} onClick={() => setCause(hypothesis.label)} key={hypothesis.label}><b>{String(index + 1).padStart(2, "0")}</b><span><strong>{hypothesis.label}</strong><small>{hypothesis.strength}</small></span><em>{hypothesis.confidence.toFixed(2)}</em></motion.button>)}</div><AnimatePresence mode="wait" initial={false}><motion.div key={selectedCause.label} className="evidence" initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={reduce ? undefined : { opacity: 0, y: -6 }} transition={reduce ? { duration: 0 } : { duration: 0.18 }}><div className="support"><h3><CheckCircle2 />Supporting evidence</h3>{selectedCause.supporting.map((item, index) => <p key={`${item.text}-${index}`}><strong>{item.text}</strong><span>{item.source} · {item.timestamp}</span></p>)}</div><div className="contradict"><h3><XCircle />Contradictory evidence</h3>{selectedCause.contradicting.length ? selectedCause.contradicting.map((item, index) => <p key={`${item.text}-${index}`}><strong>{item.text}</strong><span>{item.source} · {item.timestamp}</span></p>) : <p><strong>No contradiction recorded</strong><span>Rule engine · current run</span></p>}</div></motion.div></AnimatePresence></div><footer><span>Rule <strong>{provenance.ruleVersion}</strong></span><span>Generated <strong>{provenance.generatedAt}</strong></span><span>Threshold <strong>0.45</strong></span></footer></motion.article>
     <motion.article initial={reduce ? false : { opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={reduce ? { duration: 0 } : { ...spring, delay: 0.07 }} className="card action-card"><SectionTitle eyebrow="Decide" title="Recommended action" action={<Badge severity={account.severity} />} /><div className="action-hero"><span><LifeBuoy /></span><div><strong>{profile.action.recommended}</strong><p>{profile.action.description}</p><small>AI confidence {confidence}%</small></div></div><p className="action-rationale">{profile.action.explanation}</p><div className="utility"><div><span>Benefit</span><strong>{profile.action.benefit}</strong></div><div><span>Friction</span><strong>{profile.action.friction}</strong></div><div><span>Risk</span><strong>{profile.action.risk}</strong></div></div><div className="checks">{profile.action.checks.map((check) => <span key={check}><Check />{check}</span>)}</div><div className="alternatives"><small>Eligible alternatives</small>{eligibleAlternatives.map((item) => <span key={item}><CheckCircle2 />{item}</span>)}</div><div className="rejected"><small>Rejected by policy</small>{profile.action.rejected.map((item) => <p key={item.name}><X /><span><strong>{item.name}</strong>{item.reason}</span></p>)}</div>{showModify && reviewStatus === "pending" && <div className="modify-action"><label htmlFor={`modify-${profile.accountId}`}>Choose an eligible action</label><select id={`modify-${profile.accountId}`} value={modifiedAction} onChange={(event) => setModifiedAction(event.target.value)}>{eligibleAlternatives.map((item) => <option key={item}>{item}</option>)}</select><textarea aria-label="Reason for modification" placeholder="Reason for modification" defaultValue="Use the lower-friction eligible option." /><button className="primary full" onClick={() => { setReviewStatus("modified"); setShowModify(false); }}><Check />Confirm modification</button></div>}{reviewStatus === "pending" && !showModify ? <div className="inline-approval"><button className="danger" onClick={() => setReviewStatus("rejected")}><X />Reject</button><button className="secondary" onClick={() => setShowModify(true)}><Menu />Modify</button><motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} transition={spring} className="primary" onClick={() => setReviewStatus("approved")}><Check />{profile.action.approvalRequired ? "Approve" : "Start mock action"}</motion.button></div> : reviewStatus !== "pending" && <div className={cx("inline-decision-result", reviewStatus)}><span>{reviewStatus === "rejected" ? <XCircle /> : <CheckCircle2 />}</span><div><strong>{reviewStatus === "modified" ? modifiedAction : `Action ${reviewStatus}`}</strong><small>{reviewStatus === "rejected" ? "Execution blocked. Audit event recorded." : "Mock execution recorded. Outcome measurement is ready."}</small></div><button className="text-btn" onClick={() => setReviewStatus("pending")}>Undo</button></div>}<div className="intervention-workflow" style={{ marginTop: '1rem', padding: '1rem', borderTop: '1px solid var(--border, #e8e8e3)' }}>
           <small style={{ display: 'block', marginBottom: '0.5rem', opacity: 0.7 }}>Intervention workflow</small>
           {!createdIntervention ? (
@@ -562,8 +613,8 @@ function Customer360({ accountId, back }: { accountId: string; back: () => void 
             </div>
           )}
         </div>
-<footer className="action-meta"><span>decision-agent-v0.1</span><span>policy-v2.4</span><span>18 Jul 2026, 21:42</span></footer></motion.article></RevealSection>
-    <motion.article initial={reduce ? false : { opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.16 }} transition={reduce ? { duration: 0 } : spring} className="card timeline"><SectionTitle eyebrow="Unified history" title="Account timeline" action={<button className="period">All events <ChevronDown /></button>} />{profile.timeline.map((event, index) => { const Icon = timelineIcons[event.tone]; return <motion.div initial={reduce ? false : { opacity: 0, x: -8 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true, amount: 0.7 }} transition={reduce ? { duration: 0 } : { ...spring, delay: index * 0.04 }} className="timeline-row" key={event.title}><span className={`event-icon ${event.tone}`}><Icon /></span><div><strong>{event.title}</strong><small>{event.meta}</small></div><MoreHorizontal /></motion.div>; })}</motion.article></div>
+<footer className="action-meta"><span>{provenance.agent}</span><span>{provenance.policy}</span><span>{provenance.generatedAt}</span></footer></motion.article></RevealSection>
+    <motion.article initial={reduce ? false : { opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.16 }} transition={reduce ? { duration: 0 } : spring} className="card timeline"><SectionTitle eyebrow="Unified history" title="Account timeline" action={<button className="period">All events <ChevronDown /></button>} />{profile.timeline.map((event, index) => { const Icon = timelineIcons[event.tone]; return <motion.div initial={reduce ? false : { opacity: 0, x: -8 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true, amount: 0.7 }} transition={reduce ? { duration: 0 } : { ...spring, delay: index * 0.04 }} className="timeline-row" key={`${event.title}-${event.meta}-${index}`}><span className={`event-icon ${event.tone}`}><Icon /></span><div><strong>{event.title}</strong><small>{event.meta}</small></div><MoreHorizontal /></motion.div>; })}</motion.article></div>
   </section></>;
 }
 
@@ -599,7 +650,7 @@ function Approvals() {
     Promise.all(missing.map((id) => getCustomer360(id).catch(() => null)))
       .then((results) => {
         const next: Record<string, BackendAccount> = { ...accountCache };
-        results.forEach((r, i) => { if (r) next[missing[i]] = r; });
+        results.forEach((r, i) => { if (r) next[missing[i]] = r.account; });
         setAccountCache(next);
       })
       .finally(() => setAccountsLoading(false));
@@ -735,6 +786,15 @@ function Outcomes() {
   // Fetch all interventions to join with outcomes (for account_id, action details)
   const { data: apiInterventions, loading: interventionsLoading, usingFallback: interventionsFallback } = useInterventions();
 
+  // Fetch real accounts (with analysis) to resolve names/churn types by ID —
+  // the mock accounts array only covers 9 IDs, but the live backend has 50.
+  const { data: apiAccounts, loading: accountsLoading, usingFallback: accountsFallback } = useAccounts(true);
+  const accountMap = useMemo(() => {
+    const map: Record<string, Account> = {};
+    apiAccounts.forEach((a) => { map[a.id] = a; });
+    return map;
+  }, [apiAccounts]);
+
   // Build a lookup from intervention_id → Intervention
   const interventionMap = useMemo(() => {
     const map: Record<string, Intervention> = {};
@@ -743,9 +803,12 @@ function Outcomes() {
   }, [apiInterventions]);
 
   // Determine if we have real data or need to fall back to mock
-  const showFallback = kpiFallback || outcomesFallback || interventionsFallback;
-  const isLoading = kpiLoading || outcomesLoading || interventionsLoading;
-  const hasApiOutcomes = !outcomesFallback && apiOutcomes.length > 0;
+  const showFallback = kpiFallback || outcomesFallback || interventionsFallback || accountsFallback;
+  const isLoading = kpiLoading || outcomesLoading || interventionsLoading || accountsLoading;
+  // "Has API outcomes/interventions" means the API is reachable — an empty
+  // array from a healthy API is real (no data yet), not a fallback trigger.
+  const hasApiOutcomes = !outcomesFallback;
+  const hasApiInterventions = !interventionsFallback;
 
   // For the outcomes table: merge API data or fall back to mock churnProfiles
   const outcomeRows = useMemo(() => {
@@ -753,12 +816,11 @@ function Outcomes() {
       return apiOutcomes.map((o) => {
         const intervention = interventionMap[o.intervention_id];
         const accountId = intervention?.account_id ?? '';
-        const mockAcc = getAccount(accountId);
-        const mockProf = getChurnProfile(accountId);
+        const account = accountMap[accountId];
         return {
           id: o.intervention_id,
-          churnType: mockProf?.churnType ?? 'Unknown',
-          accountName: mockAcc?.name ?? accountId,
+          churnType: account?.churnType ?? 'Unknown',
+          accountName: account?.name ?? accountId,
           finalAction: intervention?.final_action ?? intervention?.recommended_action ?? '',
           status: o.renewed ? 'Renewed' : o.churned ? 'Churned' : o.downgraded ? 'Downgraded' : 'Observed',
           response: o.response ?? '',
@@ -783,7 +845,63 @@ function Outcomes() {
         healthDelta: profile.outcome.healthDelta,
       };
     });
-  }, [hasApiOutcomes, apiOutcomes, interventionMap]);
+  }, [hasApiOutcomes, apiOutcomes, interventionMap, accountMap]);
+
+  // Weekly accepted-vs-overridden bar chart, bucketed from real intervention
+  // created_at timestamps (accepted = approved/executed/delivered, overridden = modified/rejected).
+  // Only the mock/unreachable-API case falls back to the fixture trend — a
+  // reachable API with zero interventions renders as an empty chart, not fake bars.
+  const weeklyDecisions = useMemo(() => {
+    if (!hasApiInterventions) return outcomeTrend;
+    if (apiInterventions.length === 0) return [];
+    const buckets = new Map<number, { accepted: number; overridden: number; weekStart: Date }>();
+    apiInterventions.forEach((i) => {
+      const created = new Date(i.created_at);
+      const weekStart = new Date(created);
+      weekStart.setUTCHours(0, 0, 0, 0);
+      weekStart.setUTCDate(weekStart.getUTCDate() - weekStart.getUTCDay());
+      const key = weekStart.getTime();
+      if (!buckets.has(key)) buckets.set(key, { accepted: 0, overridden: 0, weekStart });
+      const bucket = buckets.get(key)!;
+      if (['approved', 'executed', 'delivered'].includes(i.status)) bucket.accepted += 1;
+      else if (['modified', 'rejected'].includes(i.status)) bucket.overridden += 1;
+    });
+    return [...buckets.values()]
+      .sort((a, b) => a.weekStart.getTime() - b.weekStart.getTime())
+      .map((b, i) => ({ week: `W${i + 1}`, accepted: b.accepted, overridden: b.overridden }));
+  }, [hasApiInterventions, apiInterventions]);
+
+  // Time to action: median duration between intervention creation and its
+  // last update, for interventions that moved past "pending".
+  const timeToActionLabel = useMemo(() => {
+    if (!hasApiInterventions) return '4.2h';
+    const durations = apiInterventions
+      .filter((i) => i.status !== 'pending')
+      .map((i) => new Date(i.updated_at).getTime() - new Date(i.created_at).getTime())
+      .filter((ms) => ms > 0)
+      .sort((a, b) => a - b);
+    if (durations.length === 0) return '—';
+    const medianMs = durations[Math.floor(durations.length / 2)];
+    const hours = medianMs / 3_600_000;
+    return hours < 1 ? `${Math.round(medianMs / 60_000)}m` : `${hours.toFixed(1)}h`;
+  }, [hasApiInterventions, apiInterventions]);
+
+  // Health movement: average health_delta across recorded outcomes.
+  const healthMovementLabel = useMemo(() => {
+    if (!hasApiOutcomes) return '+6.8';
+    const deltas = apiOutcomes.map((o) => o.health_delta).filter((d): d is number => d != null);
+    if (deltas.length === 0) return '—';
+    const avg = deltas.reduce((sum, d) => sum + d, 0) / deltas.length;
+    return `${avg >= 0 ? '+' : ''}${avg.toFixed(1)}`;
+  }, [hasApiOutcomes, apiOutcomes]);
+
+  // "Observed recovery" spotlight: most recent recorded outcome, or an empty
+  // state when no outcomes have been recorded yet (real seed data starts empty).
+  const latestOutcome = hasApiOutcomes
+    ? [...apiOutcomes].sort((a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime())[0]
+    : undefined;
+  const latestIntervention = latestOutcome ? interventionMap[latestOutcome.intervention_id] : undefined;
+  const latestAccount = latestIntervention ? accountMap[latestIntervention.account_id] : undefined;
 
   return <>
     <FallbackBanner show={showFallback} />
@@ -791,20 +909,25 @@ function Outcomes() {
     <section className="kpi-grid">
       <Kpi label="Acceptance rate" value={kpis.acceptanceRate} delta={8.1} note="Recommendations accepted" icon={ThumbsUp} tone="green" />
       <Kpi label="Override rate" value={kpis.overrideRate} delta={-2.4} note="Decisions changed" icon={ArrowRight} tone="violet" />
-      <Kpi label="Time to action" value="4.2h" delta={-18} note="Median, last 30 days" icon={Clock3} tone="blue" />
-      <Kpi label="Health movement" value="+6.8" delta={4.1} note="Observed after intervention" icon={TrendingUp} tone="amber" />
+      <Kpi label="Time to action" value={timeToActionLabel} delta={-18} note="Median, last 30 days" icon={Clock3} tone="blue" />
+      <Kpi label="Health movement" value={healthMovementLabel} delta={4.1} note="Observed after intervention" icon={TrendingUp} tone="amber" />
     </section>
     <section className="chart-grid">
       <article className="card chart-card wide">
         <SectionTitle eyebrow="Workflow movement" title="Recommendation decisions" detail="Observed activity only; no causal claim." />
-        <div className="chart"><ResponsiveContainer><BarChart data={outcomeTrend}><CartesianGrid vertical={false} stroke="#e8e8e3" /><XAxis dataKey="week" axisLine={false} tickLine={false} /><YAxis axisLine={false} tickLine={false} /><Tooltip /><Bar dataKey="accepted" fill="#33483f" radius={[5,5,0,0]} /><Bar dataKey="overridden" fill="#c7c9c3" radius={[5,5,0,0]} /></BarChart></ResponsiveContainer></div>
+        <div className="chart"><ResponsiveContainer><BarChart data={weeklyDecisions}><CartesianGrid vertical={false} stroke="#e8e8e3" /><XAxis dataKey="week" axisLine={false} tickLine={false} /><YAxis axisLine={false} tickLine={false} /><Tooltip /><Bar dataKey="accepted" fill="#33483f" radius={[5,5,0,0]} /><Bar dataKey="overridden" fill="#c7c9c3" radius={[5,5,0,0]} /></BarChart></ResponsiveContainer></div>
       </article>
       <article className="card recovery">
         <small>Observed recovery</small>
-        <div><span className="avatar">[NL]</span><span><strong>Northstar Labs</strong><p>Support escalation · {hasApiOutcomes ? 'recorded' : 'simulated'}</p></span></div>
-        <section><span>Health score</span><div><strong>49</strong><ArrowRight /><strong>61</strong></div><Delta value={12} points /></section>
-        <ul><li><CheckCircle2 />Severe ticket resolved</li><li><TrendingUp />Usage improved 18%</li><li><Clock3 />Observed over 14 days</li></ul>
-        <em>{hasApiOutcomes ? 'Observed outcome from API' : 'Simulated outcome · not causal evidence'}</em>
+        {latestOutcome && latestAccount ? <>
+          <div><Avatar account={latestAccount} small /><span><strong>{latestAccount.name}</strong><p>{latestIntervention?.final_action ?? latestIntervention?.recommended_action ?? 'Intervention'} · recorded</p></span></div>
+          <section><span>Usage change</span><div><strong>{latestOutcome.usage_delta != null ? `${latestOutcome.usage_delta >= 0 ? '+' : ''}${latestOutcome.usage_delta}%` : '—'}</strong></div>{latestOutcome.health_delta != null && <Delta value={latestOutcome.health_delta} points />}</section>
+          <ul>{latestOutcome.response && <li><CheckCircle2 />{latestOutcome.response}</li>}{latestOutcome.observation && <li><Clock3 />{latestOutcome.observation}</li>}</ul>
+          <em>Observed outcome from API</em>
+        </> : <>
+          <div><span className="avatar">[—]</span><span><strong>No outcomes recorded yet</strong><p>Record an outcome from an approved intervention to see it here.</p></span></div>
+          <em>No observed data · not causal evidence</em>
+        </>}
       </article>
     </section>
     <article className="card queue-card">
@@ -941,11 +1064,16 @@ function Audit() {
 export function ValueLoopApp({ initialScreen, initialAccountId = "northstar" }: { initialScreen: Screen; initialAccountId?: string }) {
   const router = useRouter(); const screen = initialScreen; const [mobile, setMobile] = useState(false); const [fresh, setFresh] = useState(false); const [tour, setTour] = useState(false);
   const reduce = useReducedMotion();
+  const { data: pendingInterventions } = useInterventions('pending');
+  const approvalCount = pendingInterventions.length;
   const activeAccount = getAccount(initialAccountId); const activeProfile = getChurnProfile(activeAccount.id);
+  // Computed client-side only, after mount, to avoid a server/client hydration mismatch on the date string.
+  const [reportingDate, setReportingDate] = useState<string | null>(null);
+  useEffect(() => { setReportingDate(new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })); }, []);
   const select = (s: Screen, accountId?: string) => { router.push(s === "account" ? `/accounts/${accountId ?? activeAccount.id}` : routes[s]); setMobile(false); window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" }); };
   const h: [string, string, string] = screen === "account" ? [`Account / ${activeAccount.name}`, "Customer 360", `${activeProfile?.churnType ?? "Account"}: unified value, risk, evidence, decisions, and activity.`] : headings[screen];
   const activeNav = (id: Screen) => screen === id || screen === "account" && id === "accounts";
-  return <div className="shell"><a className="skip-link" href="#main-content">Skip to main content</a><aside className={cx("sidebar", mobile && "open")}><div className="brand"><motion.span initial={reduce ? false : { opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={reduce ? { duration: 0 } : spring}><Activity /></motion.span><div><strong>ValueLoop</strong><small>Customer intelligence</small></div><button aria-label="Close navigation" onClick={() => setMobile(false)}><X /></button></div><nav aria-label="Primary navigation"><small>Workspace</small>{nav.map(([id, label, Icon], index) => <motion.button initial={reduce ? false : { opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: index * 0.035 }} whileHover={reduce ? undefined : { x: 2 }} whileTap={reduce ? undefined : { scale: 0.985 }} key={id} aria-current={activeNav(id) ? "page" : undefined} className={activeNav(id) ? "active" : ""} onClick={() => select(id)}><Icon /><span>{label}</span>{id === "approvals" && <b>{churnProfiles.filter((profile) => profile.action.approvalRequired).length}</b>}</motion.button>)}<small className="nav-section">Explore & configure</small>{exploreNav.map(([id, label, Icon], index) => <motion.button initial={reduce ? false : { opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: 0.18 + index * 0.035 }} whileHover={reduce ? undefined : { x: 2 }} whileTap={reduce ? undefined : { scale: 0.985 }} key={id} aria-current={activeNav(id) ? "page" : undefined} className={activeNav(id) ? "active" : ""} onClick={() => select(id)}><Icon /><span>{label}</span>{id === "guide" && <em>Start</em>}</motion.button>)}</nav><div className="sidebar-foot"><motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.99 }} className="fresh-card" onClick={() => setFresh(!fresh)}><span><Database /></span><div><strong>Sources healthy</strong><small>Updated 8 min ago</small></div><ChevronRight /></motion.button><AnimatePresence>{fresh && <motion.div initial={reduce ? false : { opacity: 0, y: 6, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={reduce ? undefined : { opacity: 0, y: 4, scale: 0.98 }} transition={reduce ? { duration: 0 } : spring} className="fresh-pop"><strong>Demo data is current</strong><p>All four sources passed validation.</p><button onClick={() => setFresh(false)}>Run mock refresh</button></motion.div>}</AnimatePresence><div className="user"><span>AR</span><div><strong>Aisha Rahman</strong><small>Customer Success Manager</small></div><MoreHorizontal aria-hidden="true" /></div></div></aside><AnimatePresence>{mobile && <motion.button initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={reduce ? undefined : { opacity: 0 }} className="scrim" onClick={() => setMobile(false)} aria-label="Close navigation" />}</AnimatePresence>
-  <main id="main-content"><motion.header initial={reduce ? false : { opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : spring} className="topbar"><motion.button whileTap={reduce ? undefined : { scale: 0.94 }} aria-label="Open navigation" className="menu" onClick={() => setMobile(true)}><Menu /></motion.button><div className="crumb"><LayoutDashboard /><span>Workspace</span><ChevronRight /><strong>{screen === "account" ? activeAccount.name : h[1]}</strong></div><div className="top-actions"><label><span className="sr-only">Search accounts</span><Search /><input aria-label="Search accounts" placeholder="Search accounts..." /><kbd>⌘ K</kbd></label><motion.button whileTap={reduce ? undefined : { scale: 0.92 }} aria-label="View notifications" className="icon-btn notify"><Bell /><i /></motion.button><button aria-label="Change reporting date" className="period">18 Jul 2026 <ChevronDown /></button></div></motion.header><div className="page"><motion.header initial={reduce ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: 0.04 }} className="page-head"><div><span>{h[0]}</span><h1>{h[1]}</h1><p>{h[2]}</p></div><div className="page-head-actions"><motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} className="secondary tutorial-launch" onClick={() => setTour(true)}><HandPointing />Page tutorial</motion.button>{screen === "overview" && <motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} transition={spring} className="primary" onClick={() => select("risk")}><Gauge />Open risk queue</motion.button>}{screen === "risk" && <motion.button whileTap={reduce ? undefined : { scale: 0.98 }} className="secondary"><Database />Refresh analysis</motion.button>}{screen === "audit" && <motion.button whileTap={reduce ? undefined : { scale: 0.98 }} className="secondary"><ShieldCheck />Manager view</motion.button>}</div></motion.header>
+  return <div className="shell"><a className="skip-link" href="#main-content">Skip to main content</a><aside className={cx("sidebar", mobile && "open")}><div className="brand"><motion.span initial={reduce ? false : { opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={reduce ? { duration: 0 } : spring}><Activity /></motion.span><div><strong>ValueLoop</strong><small>Customer intelligence</small></div><button aria-label="Close navigation" onClick={() => setMobile(false)}><X /></button></div><nav aria-label="Primary navigation"><small>Workspace</small>{nav.map(([id, label, Icon], index) => <motion.button initial={reduce ? false : { opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: index * 0.035 }} whileHover={reduce ? undefined : { x: 2 }} whileTap={reduce ? undefined : { scale: 0.985 }} key={id} aria-current={activeNav(id) ? "page" : undefined} className={activeNav(id) ? "active" : ""} onClick={() => select(id)}><Icon /><span>{label}</span>{id === "approvals" && <b>{approvalCount}</b>}</motion.button>)}<small className="nav-section">Explore & configure</small>{exploreNav.map(([id, label, Icon], index) => <motion.button initial={reduce ? false : { opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: 0.18 + index * 0.035 }} whileHover={reduce ? undefined : { x: 2 }} whileTap={reduce ? undefined : { scale: 0.985 }} key={id} aria-current={activeNav(id) ? "page" : undefined} className={activeNav(id) ? "active" : ""} onClick={() => select(id)}><Icon /><span>{label}</span>{id === "guide" && <em>Start</em>}</motion.button>)}</nav><div className="sidebar-foot"><motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.99 }} className="fresh-card" onClick={() => setFresh(!fresh)}><span><Database /></span><div><strong>Sources healthy</strong><small>Updated 8 min ago</small></div><ChevronRight /></motion.button><AnimatePresence>{fresh && <motion.div initial={reduce ? false : { opacity: 0, y: 6, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={reduce ? undefined : { opacity: 0, y: 4, scale: 0.98 }} transition={reduce ? { duration: 0 } : spring} className="fresh-pop"><strong>Demo data is current</strong><p>All four sources passed validation.</p><button onClick={() => setFresh(false)}>Run mock refresh</button></motion.div>}</AnimatePresence><div className="user"><span>AR</span><div><strong>Aisha Rahman</strong><small>Customer Success Manager</small></div><MoreHorizontal aria-hidden="true" /></div></div></aside><AnimatePresence>{mobile && <motion.button initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={reduce ? undefined : { opacity: 0 }} className="scrim" onClick={() => setMobile(false)} aria-label="Close navigation" />}</AnimatePresence>
+  <main id="main-content"><motion.header initial={reduce ? false : { opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : spring} className="topbar"><motion.button whileTap={reduce ? undefined : { scale: 0.94 }} aria-label="Open navigation" className="menu" onClick={() => setMobile(true)}><Menu /></motion.button><div className="crumb"><LayoutDashboard /><span>Workspace</span><ChevronRight /><strong>{screen === "account" ? activeAccount.name : h[1]}</strong></div><div className="top-actions"><label><span className="sr-only">Search accounts</span><Search /><input aria-label="Search accounts" placeholder="Search accounts..." /><kbd>⌘ K</kbd></label><motion.button whileTap={reduce ? undefined : { scale: 0.92 }} aria-label="View notifications" className="icon-btn notify"><Bell /><i /></motion.button><button aria-label="Change reporting date" className="period">{reportingDate ?? ' '} <ChevronDown /></button></div></motion.header><div className="page"><motion.header initial={reduce ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: 0.04 }} className="page-head"><div><span>{h[0]}</span><h1>{h[1]}</h1><p>{h[2]}</p></div><div className="page-head-actions"><motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} className="secondary tutorial-launch" onClick={() => setTour(true)}><HandPointing />Page tutorial</motion.button>{screen === "overview" && <motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} transition={spring} className="primary" onClick={() => select("risk")}><Gauge />Open risk queue</motion.button>}{screen === "risk" && <motion.button whileTap={reduce ? undefined : { scale: 0.98 }} className="secondary"><Database />Refresh analysis</motion.button>}{screen === "audit" && <motion.button whileTap={reduce ? undefined : { scale: 0.98 }} className="secondary"><ShieldCheck />Manager view</motion.button>}</div></motion.header>
   <motion.div key={screen} initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : { duration: 0.22, delay: 0.08 }}>{screen === "overview" && <Overview openAccount={(accountId) => select("account", accountId)} openRisk={() => select("risk")} openGuide={() => select("guide")} openPlaybooks={() => select("playbooks")} />}{screen === "risk" && <Queue openAccount={(accountId) => select("account", accountId)} />}{screen === "accounts" && <Queue openAccount={(accountId) => select("account", accountId)} directory />}{screen === "account" && <Customer360 accountId={activeAccount.id} back={() => select("accounts")} />}{screen === "approvals" && <Approvals />}{screen === "outcomes" && <Outcomes />}{screen === "audit" && <Audit />}{screen === "guide" && <GuidedDemo openAccount={(accountId) => select("account", accountId)} openApprovals={() => select("approvals")} openOutcomes={() => select("outcomes")} openPlaybooks={() => select("playbooks")} />}{screen === "playbooks" && <PlaybookStudio openGuide={() => select("guide")} />}</motion.div></div></main>{tour && <PageTour screen={screen} onClose={() => setTour(false)} />}</div>;
 }
