@@ -1,7 +1,7 @@
 # ValueLoop Frontend Design Specification
 
-> **Status:** Approved for frontend mockup implementation  
-> **Scope:** Frontend mockup only. No backend, database, authentication, live ML, or external API integration.
+> **Status:** Approved visual system with live synthetic-data integration
+> **Scope:** The frontend consumes the ValueLoop FastAPI and Supabase-backed synthetic demo dataset. Deterministic local fixtures remain only for offline fallback. Authentication and autonomous external actions remain out of scope.
 
 ## 1. Design Direction
 
@@ -147,7 +147,7 @@ The event timeline combines usage, billing, support, feedback, decisions, interv
 
 Customer 360 shows the decision agent as an inspectable run rather than a chat surface. The run lists these checkpoints: customer data loaded, health and risks calculated, cause hypotheses generated, policy validation completed, recommendation generated, human review, controlled execution, and outcome measurement.
 
-The structured decision summary shows the recommended action, confidence, concise rationale, supporting evidence references, agent version, policy version, analysis timestamp, and approval owner. The action panel shows eligible alternatives and rejected actions with reasons. Its fixture-only controls support approve, modify, reject, and undo states; no control calls a backend or executes a real customer action.
+The structured decision summary shows the recommended action, confidence, concise rationale, supporting evidence references, agent version, policy version, analysis timestamp, and approval owner. The action panel shows eligible alternatives and rejected actions with reasons. Its controls persist approve, modify, reject, execute, and observed-outcome transitions through the synthetic demo backend; no control executes a real customer action.
 
 ### 5.5 Approvals
 
@@ -200,11 +200,11 @@ Build the later frontend from reusable primitives: `AppShell`, `SidebarNav`, `Pa
 
 All components need default, hover, focus, selected, loading, empty, error, and disabled states in the mockup where relevant.
 
-## 7. Frontend Mock Data and Interactions
+## 7. Frontend Data and Interactions
 
-The approved mockup uses local deterministic fixtures only. Include one account for each of the eight reviewed churn pathways—Value, Experience, Product-fit, Price, Involuntary, Competitive, Lifecycle, and Silent—plus one healthy expansion-ready account. Every churn fixture includes hypotheses, supporting and contradictory evidence, a policy-safe recommendation, rejected alternatives, timeline events, and a simulated or observed outcome.
+The primary data source is the typed `/api/v1` backend using the 50-account synthetic dataset. Local deterministic fixtures cover every reviewed churn pathway and remain available only when the API is unreachable. Live responses preserve hypotheses, supporting and contradictory evidence, policy-safe recommendations, rejected alternatives, timeline events, interventions, outcomes, freshness, and version metadata.
 
-Mock interactions should support navigation, account selection, filters, chart tooltips, hypothesis selection, expandable evidence, approval dialogs, and simulated state changes. Refreshing the page may reset state. No request should call a real backend.
+Interactions support navigation, account selection, filters, chart tooltips, hypothesis selection, evidence review, governed approval transitions, execution logging, observed-outcome recording, audit inspection, and CSV validation. Actions affect only synthetic demo records and never contact a customer or change a real subscription.
 
 ## 8. Responsive and Accessibility Requirements
 

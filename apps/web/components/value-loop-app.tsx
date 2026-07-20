@@ -13,34 +13,34 @@ import {
   HandPointing, MapTrifold, PlayCircle, SlidersHorizontal, Sparkle,
   Target, ThumbsUp, TrendDown as TrendingDown, TrendUp as TrendingUp,
   UserCircleCheck as UserRoundCheck, Users,
-  X, XCircle,
+  UploadSimple, X, XCircle,
 } from "@phosphor-icons/react";
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
-import { accounts, actionMix, churnProfiles, getChurnProfile, outcomeTrend, portfolioTrend, sourceFreshness, type Account, type Severity } from "@/lib/mock-data";
+import { accounts, churnProfiles, getChurnProfile, outcomeTrend, type Account, type Severity } from "@/lib/mock-data";
 import {
-  getCustomer360, createIntervention, transitionIntervention,
+  createIntervention, getIngestionJob, recordOutcome, transitionIntervention, uploadIngestionCsv,
 } from "@/lib/api";
 import {
-  adaptAccount, adaptChurnProfile, adaptTimeline, adaptAuditLog,
+  actionLabel, adaptAccount, adaptChurnProfile, adaptTimeline, adaptAuditLog, adaptRiskHistory,
   type FrontendAuditLog,
 } from "@/lib/adapters";
 import {
   useAccounts, useCustomer360, useAnalysis, useTimeline, useKPIs,
-  useInterventions, useOutcomes, useAudit, useTrend, useActionMix,
+  useInterventions, useOutcomes, useAudit, useTrend, useActionMix, useRiskHistory,
 } from "@/lib/use-swr";
-import type { BackendAccount, Intervention } from "@/lib/api-types";
+import type { Intervention } from "@/lib/api-types";
 
-export type Screen = "overview" | "risk" | "accounts" | "account" | "approvals" | "outcomes" | "audit" | "guide" | "playbooks";
+export type Screen = "overview" | "risk" | "accounts" | "account" | "approvals" | "outcomes" | "audit" | "data" | "guide" | "playbooks";
 
 const nav = [
   ["overview", "Overview", LayoutDashboard], ["risk", "Risk Queue", Gauge], ["accounts", "Accounts", Users],
   ["approvals", "Approvals", BookOpenCheck], ["outcomes", "Outcomes", Target], ["audit", "Audit Log", FileClock],
 ] as const;
 const exploreNav = [
-  ["guide", "Guided demo", MapTrifold], ["playbooks", "Playbook Studio", SlidersHorizontal],
+  ["guide", "Guided demo", MapTrifold], ["playbooks", "Playbook Studio", SlidersHorizontal], ["data", "Data ingestion", UploadSimple],
 ] as const;
 const routes: Record<Screen, string> = {
   overview: "/",
@@ -50,6 +50,7 @@ const routes: Record<Screen, string> = {
   approvals: "/approvals",
   outcomes: "/outcomes",
   audit: "/audit",
+  data: "/data",
   guide: "/guided-demo",
   playbooks: "/playbooks",
 };
@@ -61,12 +62,12 @@ const headings: Record<Screen, [string, string, string]> = {
   approvals: ["Approve", "Approval Inbox", "Review sensitive actions with complete account and policy context."],
   outcomes: ["Measure", "Outcomes", "Track observed results without implying causal uplift."],
   audit: ["Governance", "Audit Log", "Trace every recommendation, override, approval, and state change."],
+  data: ["Data foundation", "Data ingestion", "Validate a synthetic CSV and inspect its ingestion job without hiding rejected rows."],
   guide: ["Judge walkthrough", "See the full value recovery loop", "Follow one customer from fragmented signals to a measured, human-approved outcome."],
   playbooks: ["No-code configuration", "Playbook Studio", "Adapt signals, decision rules, approvals, and outcomes in plain business language."],
 };
 
 const churnTabs = ["All", "Urgent", "Value", "Experience", "Product-fit", "Price", "Involuntary", "Competitive", "Lifecycle", "Silent"];
-const riskDays = ["12 Jul", "13 Jul", "14 Jul", "15 Jul", "16 Jul", "17 Jul", "18 Jul"];
 const getAccount = (accountId: string) => accounts.find((account) => account.id === accountId) ?? accounts[0];
 const formatMrrK = (value: number) => `RM ${Math.round(value / 1000)}k`;
 const median = (values: number[]) => {
@@ -88,6 +89,25 @@ const formatMinutes = (mins: number): string => {
 const timelineIcons = { critical: AlertCircle, warning: TrendingDown, positive: CheckCircle2, blue: Activity } as const;
 const spring = { type: "spring" as const, stiffness: 260, damping: 28, mass: 0.8 };
 
+function useLivePortfolio() {
+  const portfolio = useAccounts(true);
+  const profiles = useMemo(() => Object.fromEntries(portfolio.raw.flatMap((account) => {
+    const analysis = portfolio.analyses[account.id];
+    return analysis ? [[account.id, adaptChurnProfile(analysis, account)]] : [];
+  })), [portfolio.raw, portfolio.analyses]);
+  const scenarios = useMemo(() => {
+    if (portfolio.usingFallback || !Object.keys(profiles).length) return churnProfiles;
+    const seen = new Set<string>();
+    return portfolio.data.flatMap((account) => {
+      const profile = profiles[account.id];
+      if (!profile || seen.has(profile.churnType)) return [];
+      seen.add(profile.churnType);
+      return [profile];
+    });
+  }, [portfolio.data, portfolio.usingFallback, profiles]);
+  return { ...portfolio, profiles, scenarios };
+}
+
 type TourStep = { selector: string; title: string; detail: string };
 const commonTourStart: TourStep = { selector: ".page-head", title: "Start with the page question", detail: "This heading tells you the decision this screen helps you make. You do not need to understand the underlying models to use the workflow." };
 const tourSteps: Record<Screen, TourStep[]> = {
@@ -98,6 +118,7 @@ const tourSteps: Record<Screen, TourStep[]> = {
   approvals: [commonTourStart, { selector: ".approval-list", title: "Work through governed requests", detail: "Sensitive recommendations wait here for a named human reviewer." }, { selector: ".approval-detail", title: "Review the complete decision context", detail: "The reviewer sees customer context, freshness, policy checks, and a deterministic explanation before deciding." }, { selector: ".approval-actions", title: "Keep the final choice human", detail: "Approve, modify, or reject. Changes require an accountable decision rather than silent automation." }],
   outcomes: [commonTourStart, { selector: ".kpi-grid", title: "Measure the workflow", detail: "Acceptance, overrides, time to action, and observed health movement show whether the operating process works." }, { selector: ".chart-grid", title: "Separate activity from proof", detail: "Charts and recovery summaries are labelled observed or simulated and do not claim causal uplift." }, { selector: ".queue-card", title: "Compare every pathway outcome", detail: "The table shows the final action, response, usage movement, health movement, and observation window." }],
   audit: [commonTourStart, { selector: ".queue-tools", title: "Filter the history", detail: "Find decisions, approvals, data events, actors, or entities without reading raw system logs." }, { selector: ".data-table", title: "Trace every governed event", detail: "Each event keeps its actor, account, action, entity, time, and policy version." }, { selector: ".audit-diff", title: "See exactly what changed", detail: "The readable before-and-after record makes overrides and recommendations reviewable." }],
+  data: [commonTourStart, { selector: ".ingestion-card", title: "Choose a synthetic CSV", detail: "The API validates required identifiers before accepting a job." }, { selector: ".ingestion-status", title: "Inspect the result", detail: "Accepted rows, quarantined rows, and the server-side job state stay visible." }],
   guide: [commonTourStart, { selector: ".guide-brief", title: "Connect the problem to the response", detail: "The walkthrough begins with the manual investigation problem, then shows the governed recovery loop." }, { selector: ".scenario-bar", title: "Try a different customer situation", detail: "Switch among all eight seeded churn pathways and the tutorial updates the complete story." }, { selector: ".walkthrough-nav", title: "Move through six decisions", detail: "Select Detect, Explain, Decide, Approve, Act, or Measure at any time." }, { selector: ".walkthrough-result", title: "See what ValueLoop and the user each do", detail: "Every step shows the system result, its honesty boundary, and the next human responsibility." }],
   playbooks: [commonTourStart, { selector: ".studio-intro", title: "Configure in business language", detail: "Operators start with a customer situation instead of code, model parameters, or database rules." }, { selector: ".studio-form", title: "Build the playbook step by step", detail: "Choose a pathway, describe the intent, then set understandable confidence, frequency, approval, and customer-choice guardrails." }, { selector: ".playbook-preview", title: "Review the rule before testing", detail: "The live IF / THEN / ONLY WHEN preview exposes eligibility, approvals, rejected actions, and outcomes." }, { selector: ".customization-boundary", title: "Know what cannot be weakened", detail: "Evidence provenance, consent, policy checks, audit records, and real-world execution boundaries remain controlled." }],
 };
@@ -258,7 +279,12 @@ function AccountTable({ rows, selected, onSelect, compact }: { rows: Account[]; 
 }
 
 function ChurnIssueMap({ rows, openAccount }: { rows: Account[]; openAccount: (accountId: string) => void }) {
-  const mapped = rows.flatMap((account) => { const profile = getChurnProfile(account.id); return profile ? [{ account, profile }] : []; });
+  const { raw, analyses } = useAccounts(true);
+  const profiles = Object.fromEntries(raw.flatMap((account) => {
+    const analysis = analyses[account.id];
+    return analysis ? [[account.id, adaptChurnProfile(analysis, account)]] : [];
+  }));
+  const mapped = rows.flatMap((account) => { const profile = profiles[account.id] ?? getChurnProfile(account.id); return profile ? [{ account, profile }] : []; });
   const [selectedId, setSelectedId] = useState(mapped[0]?.account.id ?? "northstar");
   const reduce = useReducedMotion();
   if (!mapped.length) return <div className="empty"><Search /><strong>No mapped churn issues</strong><span>Try changing the active filters.</span></div>;
@@ -279,7 +305,7 @@ function Overview({ openAccount, openRisk, openGuide, openPlaybooks }: { openAcc
   const { data: kpis, loading: kpiLoading, usingFallback: kpiFallback } = useKPIs();
 
   // Fetch accounts with analysis (falls back to mock on error)
-  const { data: apiAccounts, loading: accountsLoading, usingFallback: accountsFallback } = useAccounts(true);
+  const { data: apiAccounts, raw, analyses, loading: accountsLoading, usingFallback: accountsFallback } = useAccounts(true);
 
   // Fetch live portfolio trend and action mix (falls back to mock on error)
   const { data: trend } = useTrend(6);
@@ -307,11 +333,15 @@ function Overview({ openAccount, openRisk, openGuide, openPlaybooks }: { openAcc
   // Keep selected in sync when topAccounts change
   useEffect(() => {
     if (topAccounts.length && !topAccounts.find((a) => a.id === selected.id)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelected(topAccounts[0]);
     }
   }, [topAccounts, selected.id]);
 
-  const selectedProfile = getChurnProfile(selected.id) ?? churnProfiles[0];
+  const selectedRaw = raw.find((account) => account.id === selected.id);
+  const selectedProfile = selectedRaw && analyses[selected.id]
+    ? adaptChurnProfile(analyses[selected.id], selectedRaw)
+    : getChurnProfile(selected.id) ?? churnProfiles[0];
   const showFallback = kpiFallback || accountsFallback;
 
   return <>
@@ -357,8 +387,9 @@ function GuidedDemo({ openAccount, openApprovals, openOutcomes, openPlaybooks }:
   const [step, setStep] = useState(0);
   const [accountId, setAccountId] = useState("northstar");
   const reduce = useReducedMotion();
-  const account = getAccount(accountId);
-  const profile = getChurnProfile(account.id) ?? churnProfiles[0];
+  const { data: liveAccounts, profiles, scenarios, usingFallback, loading } = useLivePortfolio();
+  const account = liveAccounts.find((item) => item.id === accountId) ?? getAccount(accountId);
+  const profile = profiles[account.id] ?? getChurnProfile(account.id) ?? scenarios[0] ?? churnProfiles[0];
   const cause = profile.causes[0];
   const outcome = profile.outcome;
   const stepContent = [
@@ -377,7 +408,7 @@ function GuidedDemo({ openAccount, openApprovals, openOutcomes, openPlaybooks }:
 
   return <>
     <section className="guide-brief"><div><span>Problem</span><h2>Warning signs live in different systems.</h2><p>Usage falls in product analytics, severe tickets sit in support, and billing still looks healthy. A non-technical CSM has to connect that pattern manually.</p></div><ArrowRight /><div><span>ValueLoop response</span><h2>One explainable recovery path.</h2><p>The same evidence flows through risk, cause, policy, approval, intervention, and outcome records without handing control to a black box.</p></div></section>
-    <section className="scenario-bar"><label htmlFor="demo-scenario"><span>Try another seeded situation</span><select id="demo-scenario" value={accountId} onChange={(event) => { setAccountId(event.target.value); setStep(0); }}>{churnProfiles.map((item) => <option value={item.accountId} key={item.accountId}>{getAccount(item.accountId).name} · {item.churnType}</option>)}</select></label><p><Badge severity={account.severity} risk={profile.probability} /> {account.mrr} MRR · renews {account.renewal}</p></section>
+    <section className="scenario-bar"><label htmlFor="demo-scenario"><span>Try another analyzed situation</span><select id="demo-scenario" value={profile.accountId} onChange={(event) => { setAccountId(event.target.value); setStep(0); }}>{scenarios.map((item) => <option value={item.accountId} key={item.accountId}>{liveAccounts.find((accountItem) => accountItem.id === item.accountId)?.name ?? getAccount(item.accountId).name} · {item.churnType}</option>)}</select></label><p><Badge severity={account.severity} risk={profile.probability} /> {account.mrr} MRR · renews {account.renewal}</p></section>
     <section className="walkthrough-shell">
       <nav className="walkthrough-nav" aria-label="Guided demo steps">{walkthroughSteps.map(([name, title], index) => <button key={name} className={index === step ? "active" : index < step ? "complete" : ""} aria-current={index === step ? "step" : undefined} onClick={() => setStep(index)}><span>{index < step ? <Check /> : String(index + 1).padStart(2, "0")}</span><div><small>{name}</small><strong>{title}</strong></div></button>)}</nav>
       <AnimatePresence mode="wait" initial={false}><motion.article key={`${accountId}-${step}`} className="walkthrough-panel" initial={reduce ? false : { opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={reduce ? undefined : { opacity: 0, x: -10 }} transition={reduce ? { duration: 0 } : spring}>
@@ -387,7 +418,7 @@ function GuidedDemo({ openAccount, openApprovals, openOutcomes, openPlaybooks }:
         <footer><button className="secondary" onClick={() => step === 0 ? openAccount(account.id) : step === 3 ? openApprovals() : openPlaybooks()}>{step === 0 ? "Open full evidence file" : step === 3 ? "Open approval inbox" : "Customize this logic"}<ArrowRight /></button><div><button className="text-btn" disabled={step === 0} onClick={() => setStep(Math.max(0, step - 1))}>Previous</button><motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} className="primary" onClick={nextAction}>{step === 5 ? "View all outcomes" : "Next step"}<ArrowRight /></motion.button></div></footer>
       </motion.article></AnimatePresence>
     </section>
-    <p className="prototype-note"><ShieldCheck />Fixture-only demonstration: signals, recommendations, approvals, and outcomes are deterministic mock data. No customer is contacted and no plan or payment is changed.</p>
+    <LoadingBar active={loading} /><FallbackBanner show={usingFallback} /><p className="prototype-note"><ShieldCheck />{usingFallback ? "Offline fixture mode" : "Live synthetic API data"}: recommendations remain advisory, policy-controlled, and human-reviewed. No customer is contacted and no plan or payment is changed.</p>
   </>;
 }
 
@@ -399,18 +430,20 @@ function PlaybookStudio({ openGuide }: { openGuide: () => void }) {
   const [customerChoice, setCustomerChoice] = useState(true);
   const [drafted, setDrafted] = useState(false);
   const [tested, setTested] = useState(false);
-  const profile = getChurnProfile(presetId) ?? churnProfiles[0];
-  const account = getAccount(profile.accountId);
+  const { data: liveAccounts, profiles, scenarios, usingFallback, loading } = useLivePortfolio();
+  const profile = profiles[presetId] ?? getChurnProfile(presetId) ?? scenarios[0] ?? churnProfiles[0];
+  const account = liveAccounts.find((item) => item.id === profile.accountId) ?? getAccount(profile.accountId);
   const prompt = `When ${profile.churnType.toLowerCase()} signals are strong, recommend ${profile.action.recommended.toLowerCase()}, keep outreach respectful, and require ${approval.toLowerCase()} review.`;
   return <>
+    <LoadingBar active={loading} /><FallbackBanner show={usingFallback} />
     <section className="studio-intro"><div><span><Sparkle />Designed for operators, not data scientists</span><h2>Describe the customer situation. ValueLoop turns it into a reviewable playbook.</h2><p>Teams start from a plain-language template, adjust a few business controls, and preview exactly which evidence, actions, approvals, and outcomes the workflow will use.</p></div><button className="secondary" onClick={openGuide}><PlayCircle />See it run first</button></section>
     <section className="studio-layout">
       <div className="studio-form">
-        <article className="studio-section"><header><span>01</span><div><h3>Choose a situation</h3><p>Start from one of the eight explainable churn pathways.</p></div></header><label><span>Playbook template</span><select value={presetId} onChange={(event) => { setPresetId(event.target.value); setTested(false); }}>{churnProfiles.map((item) => <option value={item.accountId} key={item.accountId}>{item.churnType} · {item.action.recommended}</option>)}</select></label></article>
+        <article className="studio-section"><header><span>01</span><div><h3>Choose a situation</h3><p>Start from an explainable churn pathway returned by the analysis API.</p></div></header><label><span>Playbook template</span><select value={profile.accountId} onChange={(event) => { setPresetId(event.target.value); setTested(false); }}>{scenarios.map((item) => <option value={item.accountId} key={item.accountId}>{item.churnType} · {item.action.recommended}</option>)}</select></label></article>
         <article className="studio-section"><header><span>02</span><div><h3>Say what you want in plain language</h3><p>The text becomes a draft only. Structured policy controls remain authoritative.</p></div></header><label><span>Business instruction</span><textarea defaultValue={prompt} key={prompt} rows={4} /></label><button className="text-btn" onClick={() => setDrafted(true)}><Sparkle />Generate reviewable draft</button>{drafted && <p className="inline-success"><CheckCircle2 />Draft updated locally. Review the controls below before testing.</p>}</article>
         <article className="studio-section"><header><span>03</span><div><h3>Set the guardrails</h3><p>Use business terms; technical versions and audit fields are added automatically.</p></div></header><div className="control-grid"><label><span>Minimum evidence confidence <strong>{confidence}%</strong></span><input type="range" min="45" max="90" value={confidence} onChange={(event) => setConfidence(Number(event.target.value))} /></label><label><span>Maximum customer outreach</span><select value={frequency} onChange={(event) => setFrequency(Number(event.target.value))}><option value={0}>No automatic outreach</option><option value={1}>Once every 14 days</option><option value={2}>Twice every 30 days</option></select></label><label><span>Who approves sensitive actions?</span><select value={approval} onChange={(event) => setApproval(event.target.value)}><option>CSM owner</option><option>CS manager</option><option>Finance reviewer</option><option>Support lead</option></select></label><label className="check-control"><input type="checkbox" checked={customerChoice} onChange={(event) => setCustomerChoice(event.target.checked)} /><span><strong>Keep customer-choice paths visible</strong>Show pause, downgrade, cancellation, and no-action where eligible.</span></label></div></article>
       </div>
-      <aside className="playbook-preview"><header><span>Live playbook preview</span><strong>{profile.churnType}</strong><small>Draft · fixture only · policy-v2.4</small></header><div className="preview-flow"><div><span>IF</span><p>{profile.causes[0].supporting[0].text}</p><small>and evidence confidence is at least {confidence}%</small></div><ArrowDownRight /><div><span>THEN CONSIDER</span><p>{profile.action.recommended}</p><small>{profile.action.description}</small></div><ArrowDownRight /><div><span>ONLY WHEN</span>{profile.action.checks.map((check) => <small key={check}><Check />{check}</small>)}</div></div><dl><div><dt>Approval owner</dt><dd>{approval}</dd></div><div><dt>Frequency cap</dt><dd>{frequency === 0 ? "No automatic outreach" : frequency === 1 ? "1 / 14 days" : "2 / 30 days"}</dd></div><div><dt>Customer choice</dt><dd>{customerChoice ? "Required" : "Needs policy review"}</dd></div><div><dt>Outcome to observe</dt><dd>Usage, health, response, renewal</dd></div></dl><div className="preview-rejected"><small>Automatically blocked examples</small>{profile.action.rejected.map((item) => <p key={item.name}><X />{item.name}: {item.reason}</p>)}</div><motion.button className="primary full" onClick={() => setTested(true)}><PlayCircle />Test with {account.name}</motion.button>{tested && <div className="test-result"><CheckCircle2 /><span><strong>Test passed through the full loop</strong><small>{profile.probability}% risk · {profile.action.recommended} · {profile.action.approvalRequired ? "approval routed" : "eligible mock action"}</small></span></div>}</aside>
+      <aside className="playbook-preview"><header><span>Live playbook preview</span><strong>{profile.churnType}</strong><small>Draft · {usingFallback ? "offline fixture" : "live synthetic API"} · policy-v1.0</small></header><div className="preview-flow"><div><span>IF</span><p>{profile.causes[0].supporting[0].text}</p><small>and evidence confidence is at least {confidence}%</small></div><ArrowDownRight /><div><span>THEN CONSIDER</span><p>{profile.action.recommended}</p><small>{profile.action.description}</small></div><ArrowDownRight /><div><span>ONLY WHEN</span>{profile.action.checks.map((check) => <small key={check}><Check />{check}</small>)}</div></div><dl><div><dt>Approval owner</dt><dd>{approval}</dd></div><div><dt>Frequency cap</dt><dd>{frequency === 0 ? "No automatic outreach" : frequency === 1 ? "1 / 14 days" : "2 / 30 days"}</dd></div><div><dt>Customer choice</dt><dd>{customerChoice ? "Required" : "Needs policy review"}</dd></div><div><dt>Outcome to observe</dt><dd>Usage, health, response, renewal</dd></div></dl><div className="preview-rejected"><small>Automatically blocked examples</small>{profile.action.rejected.map((item) => <p key={item.name}><X />{item.name}: {item.reason}</p>)}</div><motion.button className="primary full" onClick={() => setTested(true)}><PlayCircle />Test with {account.name}</motion.button>{tested && <div className="test-result"><CheckCircle2 /><span><strong>Test passed through the full loop</strong><small>{profile.probability}% risk · {profile.action.recommended} · {profile.action.approvalRequired ? "approval routed" : "eligible governed action"}</small></span></div>}</aside>
     </section>
     <section className="customization-boundary"><ShieldCheck /><div><strong>What teams can safely customize</strong><p>Thresholds, source mappings, segment rules, action eligibility, approval roles, frequency caps, templates, and observed outcome windows.</p></div><div><strong>What never becomes free-form</strong><p>Evidence provenance, policy checks, customer consent, audit records, rejected-action reasons, and the boundary against autonomous real-world execution.</p></div></section>
   </>;
@@ -447,13 +480,15 @@ function Customer360({ accountId, back }: { accountId: string; back: () => void 
   const reduce = useReducedMotion();
 
   // Fetch the customer 360 profile (BackendAccount shape)
-  const { data: backendAccount, loading: profileLoading, usingFallback: profileFallback } = useCustomer360(accountId);
+  const { data: customer360, loading: profileLoading, usingFallback: profileFallback } = useCustomer360(accountId);
+  const backendAccount = customer360?.account;
 
   // Fetch analysis (health, risks, causes, actions)
   const { data: apiAnalysis, loading: analysisLoading, usingFallback: analysisFallback } = useAnalysis(accountId);
 
   // Fetch timeline events
   const { data: apiTimeline, loading: timelineLoading, usingFallback: timelineFallback } = useTimeline(accountId);
+  const { data: riskHistory, loading: riskHistoryLoading, usingFallback: riskHistoryFallback } = useRiskHistory(accountId);
 
   // Build account + profile from API or fall back to mock
   const mockAccount = getAccount(accountId);
@@ -473,8 +508,8 @@ function Customer360({ accountId, back }: { accountId: string; back: () => void 
     ? { ...baseProfile, timeline: adaptedTimeline }
     : baseProfile;
 
-  const showFallback = profileFallback || analysisFallback || timelineFallback;
-  const isLoading = profileLoading || analysisLoading || timelineLoading;
+  const showFallback = profileFallback || analysisFallback || timelineFallback || riskHistoryFallback;
+  const isLoading = profileLoading || analysisLoading || timelineLoading || riskHistoryLoading;
 
   // Real provenance stamps from the analysis response; fall back to the
   // fixture values only when running on mock data.
@@ -496,73 +531,114 @@ function Customer360({ accountId, back }: { accountId: string; back: () => void 
   };
 
   const [metric, setMetric] = useState(profile.riskLabel); const [cause, setCause] = useState(profile.causes[0].label);
-  const [reviewStatus, setReviewStatus] = useState<"pending" | "approved" | "modified" | "rejected">("pending");
+  const [reviewStatus, setReviewStatusState] = useState<"pending" | "approved" | "modified" | "rejected">("pending");
   const [showModify, setShowModify] = useState(false);
   const [modifiedAction, setModifiedAction] = useState("No action");
 
   // Intervention workflow state (Phase 2)
   const [createdIntervention, setCreatedIntervention] = useState<Intervention | null>(null);
   const [creatingIntervention, setCreatingIntervention] = useState(false);
-  const [interventionTransition, setInterventionTransition] = useState<string | null>(null);
+  const [workflowError, setWorkflowError] = useState<string | null>(null);
+  const [outcomeRecorded, setOutcomeRecorded] = useState(false);
+  const [outcomeResponse, setOutcomeResponse] = useState("");
+  const recommendedCode = apiAnalysis?.actions
+    .filter((candidate) => candidate.eligibility)
+    .sort((a, b) => (b.utility_score ?? -1) - (a.utility_score ?? -1))
+    .find((candidate) => candidate.action_code !== 'no_action')?.action_code ?? 'no_action';
 
-  const handleCreateIntervention = async () => {
+  const handleCreateIntervention = async (): Promise<Intervention | null> => {
     setCreatingIntervention(true);
+    setWorkflowError(null);
     try {
       const result = await createIntervention({
         account_id: accountId,
-        recommended_action: profile.action.recommended,
+        recommended_action: recommendedCode,
       });
       setCreatedIntervention(result);
-    } catch {
-      // On failure, create a mock intervention for demo purposes
-      setCreatedIntervention({
-        id: `INT-mock-${Date.now()}`,
-        account_id: accountId,
-        recommended_action: profile.action.recommended,
-        final_action: null,
-        approver: null,
-        status: 'pending',
-        channel: null,
-        reason: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
+      return result;
+    } catch (error) {
+      setWorkflowError(error instanceof Error ? error.message : 'Could not create the intervention.');
+      return null;
     } finally {
       setCreatingIntervention(false);
     }
   };
 
-  const handleInterventionTransition = async (status: string) => {
-    if (!createdIntervention) return;
+  const handleInterventionTransition = async (status: 'approved' | 'modified' | 'rejected' | 'executed') => {
+    const intervention = createdIntervention ?? await handleCreateIntervention();
+    if (!intervention) return;
+    setWorkflowError(null);
     try {
-      await transitionIntervention(createdIntervention.id, {
+      const updated = await transitionIntervention(intervention.id, {
         status,
         actor_id: 'csm-demo',
         actor_role: 'csm',
         ...(status === 'rejected' ? { reason: 'User rejected from Customer 360' } : {}),
+        ...(status === 'modified' ? {
+          reason: 'Reviewer selected an eligible alternative',
+          final_action: apiAnalysis?.actions.find((candidate) => actionLabel(candidate.action_code) === modifiedAction)?.action_code ?? modifiedAction,
+        } : {}),
       });
-    } catch {
-      // Transition recorded locally on error
+      setCreatedIntervention(updated);
+      setReviewStatusState(status === 'executed' ? 'approved' : status);
+      setShowModify(false);
+    } catch (error) {
+      setWorkflowError(error instanceof Error ? error.message : `Could not transition to ${status}.`);
     }
-    setInterventionTransition(status);
+  };
+
+  const handleRecordOutcome = async () => {
+    if (!createdIntervention || createdIntervention.status !== 'executed') return;
+    setWorkflowError(null);
+    try {
+      await recordOutcome(createdIntervention.id, {
+        renewed: null, downgraded: null, churned: null,
+        usage_delta: null, health_delta: null,
+        response: outcomeResponse || null,
+        observation: 'Recorded from Customer 360',
+      });
+      setCreatedIntervention({ ...createdIntervention, status: 'delivered' });
+      setOutcomeRecorded(true);
+    } catch (error) {
+      setWorkflowError(error instanceof Error ? error.message : 'Could not record the outcome.');
+    }
+  };
+
+  const setReviewStatus = (status: "pending" | "approved" | "modified" | "rejected") => {
+    if (status === 'pending') {
+      if (createdIntervention && createdIntervention.status !== 'pending') {
+        setWorkflowError('Recorded decisions cannot be undone. Create a new governed intervention instead.');
+        return;
+      }
+      setReviewStatusState('pending');
+      return;
+    }
+    void handleInterventionTransition(status);
   };
 
   // Reset metric/cause when profile changes (accountId change)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMetric(profile.riskLabel);
     setCause(profile.causes[0]?.label ?? '');
     setReviewStatus("pending");
     setShowModify(false);
     setCreatedIntervention(null);
-    setInterventionTransition(null);
+    setWorkflowError(null);
+    setOutcomeRecorded(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId]);
 
   const selectedCause = profile.causes.find((hypothesis) => hypothesis.label === cause) ?? profile.causes[0];
-  const trend = profile.riskHistory.map((risk, index) => ({ day: riskDays[index], risk }));
+  const trend = riskHistory.length ? adaptRiskHistory(riskHistory, apiAnalysis?.risks[0]?.risk_type ?? profile.riskLabel) : profile.riskHistory.map((risk, index) => ({ day: `D${index + 1}`, risk }));
   const metricTabs = [profile.riskLabel, "Downgrade", "Payment"].filter((item, index, items) => items.indexOf(item) === index);
-  const eligibleAlternatives = profile.accountId === "northstar" ? ["Human outreach after incident resolution", "No action"] : ["No action"];
+  const eligibleAlternatives = apiAnalysis
+    ? apiAnalysis.actions.filter((action) => action.eligibility && actionLabel(action.action_code) !== profile.action.recommended).map((action) => actionLabel(action.action_code))
+    : profile.accountId === "northstar" ? ["Human outreach after incident resolution", "No action"] : ["No action"];
   const confidence = Math.round(profile.causes[0].confidence * 100);
+  const freshnessSources = customer360
+    ? Object.entries(customer360.freshness).map(([source, value]) => [source.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()), value] as const)
+    : [["Product usage", account.freshness], ["Billing", account.freshness], ["Support", account.freshness], ["Feedback", account.freshness]] as const;
   const agentSteps = [
     "Customer data loaded", "Health and risks calculated", "Cause hypotheses generated", "Policy validation completed", "Recommendation generated",
     profile.action.approvalRequired ? "CSM approval" : "Guardrail confirmation", "Action execution", "Outcome measurement",
@@ -572,7 +648,7 @@ function Customer360({ accountId, back }: { accountId: string; back: () => void 
   }));
   return <><FallbackBanner show={showFallback} /><LoadingBar active={isLoading} /><motion.button whileHover={reduce ? undefined : { x: -3 }} whileTap={reduce ? undefined : { scale: 0.98 }} className="back" onClick={back}><ArrowLeft />Back to accounts</motion.button><section className="customer-layout">
     <motion.aside initial={reduce ? false : { opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }} transition={reduce ? { duration: 0 } : spring} className="profile-side"><article className="card profile"><div className="profile-gradient" /><span className="profile-avatar">[{account.initials}]</span><SectionTitle eyebrow={`${account.segment} · ${account.plan}`} title={account.name} detail={account.industry} /><dl><div><dt>Churn pathway</dt><dd>{profile.churnType}</dd></div><div><dt>Monthly revenue</dt><dd>{account.mrr}</dd></div><div><dt>Renewal date</dt><dd>{account.renewal}</dd></div><div><dt>Account owner</dt><dd>{account.owner}</dd></div><div><dt>Contact status</dt><dd className="positive"><CheckCircle2 />Allowed</dd></div></dl><button className="secondary full"><UserRoundCheck />View account contacts</button></article>
-    <article className="card sources"><SectionTitle eyebrow="Data quality" title="Source freshness" action={<span className="healthy"><i />Healthy</span>} />{(sourceFreshness[account.id] ?? sourceFreshness.northstar).map((item) => <div key={item[0]}><span>{item[0]}</span><strong>{item[1]}</strong></div>)}<button className="text-btn">View ingestion details <ArrowRight /></button></article></motion.aside>
+    <article className="card sources"><SectionTitle eyebrow="Data quality" title="Source freshness" action={<span className="healthy"><i />{customer360?.data_quality ?? 0}% quality</span>} />{freshnessSources.map((item) => <div key={item[0]}><span>{item[0]}</span><strong>{item[1]}</strong></div>)}<button className="text-btn" onClick={() => window.location.assign('/data')}>View ingestion details <ArrowRight /></button></article></motion.aside>
     <div className="customer-main"><motion.article initial={reduce ? false : { opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: 0.05 }} className="card risk-chart-card"><SectionTitle eyebrow={profile.churnType} title={`${metric} risk`} action={<div className="metric-tabs">{metricTabs.map((item) => <motion.button whileTap={reduce ? undefined : { scale: 0.95 }} className={metric === item ? "active" : ""} onClick={() => setMetric(item)} key={item}>{item}</motion.button>)}</div>} /><div className="risk-number"><strong>{profile.probability}%</strong><Delta value={profile.riskDelta} /><span>vs last week</span></div><div className="risk-chart"><ResponsiveContainer><AreaChart data={trend} margin={{ top: 8, right: 8, left: -20 }}><CartesianGrid vertical={false} stroke="#e8e8e3" /><XAxis dataKey="day" axisLine={false} tickLine={false} /><YAxis domain={[0, 100]} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} /><Tooltip /><Area dataKey="risk" stroke="#33483f" strokeWidth={2.5} fill="#e8eee9" /></AreaChart></ResponsiveContainer></div><p className="chart-note"><AlertCircle />{profile.summary}</p></motion.article>
     <RevealSection className="health-grid">{profile.health.map(([label, value, delta, tone], index) => <motion.article initial={reduce ? false : { opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.5 }} transition={reduce ? { duration: 0 } : { ...spring, delay: index * 0.045 }} whileHover={reduce ? undefined : { y: -2 }} className="card health-card" key={label}><div><span>{label}</span><Delta value={delta} points /></div><strong>{value}</strong><i><motion.b initial={reduce ? false : { scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={{ once: true }} transition={reduce ? { duration: 0 } : { duration: 0.5, delay: 0.1 + index * 0.04 }} className={tone} style={{ width: `${value}%`, transformOrigin: "left" }} /></i><small>{Math.abs(delta)} point {delta >= 0 ? "improvement" : "decline"}</small></motion.article>)}</RevealSection>
     <motion.article initial={reduce ? false : { opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={reduce ? { duration: 0 } : spring} className="card agent-run">
@@ -583,8 +659,9 @@ function Customer360({ accountId, back }: { accountId: string; back: () => void 
       </div>
     </motion.article>
     <RevealSection className="decision-grid"><motion.article initial={reduce ? false : { opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={reduce ? { duration: 0 } : spring} className="cause-panel"><div className="insight-label">Explain · Cause hypotheses <ShieldCheck /></div><h2>Why is value deteriorating?</h2><p>Transparent rules rank likely explanations. These are hypotheses, not verified causes.</p><div className="cause-body"><div className="cause-list">{profile.causes.map((hypothesis, index) => <motion.button whileHover={reduce ? undefined : { x: 2 }} whileTap={reduce ? undefined : { scale: 0.985 }} transition={spring} className={selectedCause.label === hypothesis.label ? "active" : ""} onClick={() => setCause(hypothesis.label)} key={hypothesis.label}><b>{String(index + 1).padStart(2, "0")}</b><span><strong>{hypothesis.label}</strong><small>{hypothesis.strength}</small></span><em>{hypothesis.confidence.toFixed(2)}</em></motion.button>)}</div><AnimatePresence mode="wait" initial={false}><motion.div key={selectedCause.label} className="evidence" initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={reduce ? undefined : { opacity: 0, y: -6 }} transition={reduce ? { duration: 0 } : { duration: 0.18 }}><div className="support"><h3><CheckCircle2 />Supporting evidence</h3>{selectedCause.supporting.map((item, index) => <p key={`${item.text}-${index}`}><strong>{item.text}</strong><span>{item.source} · {item.timestamp}</span></p>)}</div><div className="contradict"><h3><XCircle />Contradictory evidence</h3>{selectedCause.contradicting.length ? selectedCause.contradicting.map((item, index) => <p key={`${item.text}-${index}`}><strong>{item.text}</strong><span>{item.source} · {item.timestamp}</span></p>) : <p><strong>No contradiction recorded</strong><span>Rule engine · current run</span></p>}</div></motion.div></AnimatePresence></div><footer><span>Rule <strong>{provenance.ruleVersion}</strong></span><span>Generated <strong>{provenance.generatedAt}</strong></span><span>Threshold <strong>0.45</strong></span></footer></motion.article>
-    <motion.article initial={reduce ? false : { opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={reduce ? { duration: 0 } : { ...spring, delay: 0.07 }} className="card action-card"><SectionTitle eyebrow="Decide" title="Recommended action" action={<Badge severity={account.severity} />} /><div className="action-hero"><span><LifeBuoy /></span><div><strong>{profile.action.recommended}</strong><p>{profile.action.description}</p><small>AI confidence {confidence}%</small></div></div><p className="action-rationale">{profile.action.explanation}</p><div className="utility"><div><span>Benefit</span><strong>{profile.action.benefit}</strong></div><div><span>Friction</span><strong>{profile.action.friction}</strong></div><div><span>Risk</span><strong>{profile.action.risk}</strong></div></div><div className="checks">{profile.action.checks.map((check) => <span key={check}><Check />{check}</span>)}</div><div className="alternatives"><small>Eligible alternatives</small>{eligibleAlternatives.map((item) => <span key={item}><CheckCircle2 />{item}</span>)}</div><div className="rejected"><small>Rejected by policy</small>{profile.action.rejected.map((item) => <p key={item.name}><X /><span><strong>{item.name}</strong>{item.reason}</span></p>)}</div>{showModify && reviewStatus === "pending" && <div className="modify-action"><label htmlFor={`modify-${profile.accountId}`}>Choose an eligible action</label><select id={`modify-${profile.accountId}`} value={modifiedAction} onChange={(event) => setModifiedAction(event.target.value)}>{eligibleAlternatives.map((item) => <option key={item}>{item}</option>)}</select><textarea aria-label="Reason for modification" placeholder="Reason for modification" defaultValue="Use the lower-friction eligible option." /><button className="primary full" onClick={() => { setReviewStatus("modified"); setShowModify(false); }}><Check />Confirm modification</button></div>}{reviewStatus === "pending" && !showModify ? <div className="inline-approval"><button className="danger" onClick={() => setReviewStatus("rejected")}><X />Reject</button><button className="secondary" onClick={() => setShowModify(true)}><Menu />Modify</button><motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} transition={spring} className="primary" onClick={() => setReviewStatus("approved")}><Check />{profile.action.approvalRequired ? "Approve" : "Start mock action"}</motion.button></div> : reviewStatus !== "pending" && <div className={cx("inline-decision-result", reviewStatus)}><span>{reviewStatus === "rejected" ? <XCircle /> : <CheckCircle2 />}</span><div><strong>{reviewStatus === "modified" ? modifiedAction : `Action ${reviewStatus}`}</strong><small>{reviewStatus === "rejected" ? "Execution blocked. Audit event recorded." : "Mock execution recorded. Outcome measurement is ready."}</small></div><button className="text-btn" onClick={() => setReviewStatus("pending")}>Undo</button></div>}<div className="intervention-workflow" style={{ marginTop: '1rem', padding: '1rem', borderTop: '1px solid var(--border, #e8e8e3)' }}>
+    <motion.article initial={reduce ? false : { opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={reduce ? { duration: 0 } : { ...spring, delay: 0.07 }} className="card action-card"><SectionTitle eyebrow="Decide" title="Recommended action" action={<Badge severity={account.severity} />} /><div className="action-hero"><span><LifeBuoy /></span><div><strong>{profile.action.recommended}</strong><p>{profile.action.description}</p><small>AI confidence {confidence}%</small></div></div><p className="action-rationale">{profile.action.explanation}</p><div className="utility"><div><span>Benefit</span><strong>{profile.action.benefit}</strong></div><div><span>Friction</span><strong>{profile.action.friction}</strong></div><div><span>Risk</span><strong>{profile.action.risk}</strong></div></div><div className="checks">{profile.action.checks.map((check) => <span key={check}><Check />{check}</span>)}</div><div className="alternatives"><small>Eligible alternatives</small>{eligibleAlternatives.map((item) => <span key={item}><CheckCircle2 />{item}</span>)}</div><div className="rejected"><small>Rejected by policy</small>{profile.action.rejected.map((item) => <p key={item.name}><X /><span><strong>{item.name}</strong>{item.reason}</span></p>)}</div>{showModify && reviewStatus === "pending" && <div className="modify-action"><label htmlFor={`modify-${profile.accountId}`}>Choose an eligible action</label><select id={`modify-${profile.accountId}`} value={modifiedAction} onChange={(event) => setModifiedAction(event.target.value)}>{eligibleAlternatives.map((item) => <option key={item}>{item}</option>)}</select><textarea aria-label="Reason for modification" placeholder="Reason for modification" defaultValue="Use the lower-friction eligible option." /><button className="primary full" onClick={() => { setReviewStatus("modified"); setShowModify(false); }}><Check />Confirm modification</button></div>}{reviewStatus === "pending" && !showModify ? <div className="inline-approval"><button className="danger" onClick={() => setReviewStatus("rejected")}><X />Reject</button><button className="secondary" onClick={() => setShowModify(true)}><Menu />Modify</button><motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} transition={spring} className="primary" onClick={() => setReviewStatus("approved")}><Check />{profile.action.approvalRequired ? "Approve" : "Create governed action"}</motion.button></div> : reviewStatus !== "pending" && <div className={cx("inline-decision-result", reviewStatus)}><span>{reviewStatus === "rejected" ? <XCircle /> : <CheckCircle2 />}</span><div><strong>{reviewStatus === "modified" ? modifiedAction : `Action ${reviewStatus}`}</strong><small>{reviewStatus === "rejected" ? "Execution blocked. Audit event recorded." : "Decision recorded. Execute the approved intervention below before measuring an outcome."}</small></div><button className="text-btn" onClick={() => setReviewStatus("pending")}>Undo</button></div>}<div className="intervention-workflow" style={{ marginTop: '1rem', padding: '1rem', borderTop: '1px solid var(--border, #e8e8e3)' }}>
           <small style={{ display: 'block', marginBottom: '0.5rem', opacity: 0.7 }}>Intervention workflow</small>
+          {workflowError && <p className="inline-error">{workflowError}</p>}
           {!createdIntervention ? (
             <motion.button
               whileHover={reduce ? undefined : { y: -2 }}
@@ -595,21 +672,13 @@ function Customer360({ accountId, back }: { accountId: string; back: () => void 
             >
               {creatingIntervention ? 'Creating…' : <><PlayCircle />Create Intervention</>}
             </motion.button>
-          ) : interventionTransition ? (
-            <div className={cx('inline-decision-result', interventionTransition === 'rejected' ? 'rejected' : 'approved')}>
-              <span>{interventionTransition === 'rejected' ? <XCircle /> : <CheckCircle2 />}</span>
-              <div>
-                <strong>Intervention {interventionTransition}</strong>
-                <small>ID: {createdIntervention.id} · Status recorded in audit log.</small>
-              </div>
-              <button className="text-btn" onClick={() => { setCreatedIntervention(null); setInterventionTransition(null); }}>Reset</button>
-            </div>
           ) : (
             <div className="inline-approval">
               <span style={{ fontSize: '0.85rem', opacity: 0.7 }}>Intervention {createdIntervention.id.slice(0, 12)} · {createdIntervention.status}</span>
-              <button className="danger" onClick={() => handleInterventionTransition('rejected')}><X />Reject</button>
-              <motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} className="primary" onClick={() => handleInterventionTransition('approved')}><Check />Approve</motion.button>
-              <motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} className="secondary" onClick={() => handleInterventionTransition('executed')}><PlayCircle />Execute</motion.button>
+              {createdIntervention.status === 'pending' && <><button className="danger" onClick={() => handleInterventionTransition('rejected')}><X />Reject</button><motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} className="primary" onClick={() => handleInterventionTransition('approved')}><Check />Approve</motion.button></>}
+              {createdIntervention.status === 'approved' && <motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} className="primary" onClick={() => handleInterventionTransition('executed')}><PlayCircle />Execute approved action</motion.button>}
+              {createdIntervention.status === 'executed' && <div className="outcome-entry"><input aria-label="Observed customer response" placeholder="Observed customer response" value={outcomeResponse} onChange={(event) => setOutcomeResponse(event.target.value)} /><button className="primary" onClick={handleRecordOutcome}>Record observed outcome</button></div>}
+              {createdIntervention.status === 'delivered' && <span className="positive"><CheckCircle2 />{outcomeRecorded ? 'Outcome recorded' : 'Delivered'}</span>}
             </div>
           )}
         </div>
@@ -621,8 +690,13 @@ function Customer360({ accountId, back }: { accountId: string; back: () => void 
 function Approvals() {
   const reduce = useReducedMotion();
   const [selected, setSelected] = useState(0);
-  const [decision, setDecision] = useState<"pending" | "approved" | "rejected">("pending");
+  const [decision, setDecision] = useState<"pending" | "approved" | "modified" | "rejected">("pending");
   const [processing, setProcessing] = useState(false);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
+  const [modifying, setModifying] = useState(false);
+  const [modifyReason, setModifyReason] = useState("");
+  const [approvalAction, setApprovalAction] = useState("no_action");
+  const { data: portfolioAccounts, profiles: liveProfiles, loading: accountsLoading } = useLivePortfolio();
 
   // Fetch pending interventions from API
   const { data: interventions, loading, usingFallback, refresh } = useInterventions('pending');
@@ -637,26 +711,6 @@ function Approvals() {
   // Determine the list to render: if using API data, use interventions; else use mock
   const displayCount = usingFallback ? mockRequests.length : interventionList.length;
 
-  const [accountCache, setAccountCache] = useState<Record<string, BackendAccount>>({});
-  const [accountsLoading, setAccountsLoading] = useState(false);
-
-  // Fetch account details for API interventions
-  useEffect(() => {
-    if (usingFallback || interventionList.length === 0) return;
-    const ids = [...new Set(interventionList.map((i) => i.account_id))];
-    const missing = ids.filter((id) => !accountCache[id]);
-    if (missing.length === 0) return;
-    setAccountsLoading(true);
-    Promise.all(missing.map((id) => getCustomer360(id).catch(() => null)))
-      .then((results) => {
-        const next: Record<string, BackendAccount> = { ...accountCache };
-        results.forEach((r, i) => { if (r) next[missing[i]] = r.account; });
-        setAccountCache(next);
-      })
-      .finally(() => setAccountsLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [interventionList.length, usingFallback]);
-
   // Selected item context
   const selectedItem = usingFallback ? mockRequests[selected] : interventionList[selected];
   const selectedAccountId = usingFallback
@@ -668,15 +722,12 @@ function Approvals() {
 
   // Resolve account for selected item
   const mockAccount = selectedAccountId ? getAccount(selectedAccountId) : accounts[0];
-  const apiAccount = selectedAccountId ? accountCache[selectedAccountId] : undefined;
-  const displayAccount: Account = apiAccount
-    ? adaptAccount(apiAccount)
-    : mockAccount;
+  const displayAccount = portfolioAccounts.find((account) => account.id === selectedAccountId) ?? mockAccount;
 
   // Profile from mock for additional context (churn type, etc.)
-  const mockProfile = selectedAccountId ? (getChurnProfile(selectedAccountId) ?? churnProfiles[0]) : churnProfiles[0];
+  const mockProfile = selectedAccountId ? (liveProfiles[selectedAccountId] ?? getChurnProfile(selectedAccountId) ?? churnProfiles[0]) : churnProfiles[0];
 
-  const handleTransition = async (status: 'approved' | 'rejected') => {
+  const handleTransition = async (status: 'approved' | 'modified' | 'rejected') => {
     if (usingFallback) {
       setDecision(status);
       return;
@@ -684,18 +735,20 @@ function Approvals() {
     const intervention = selectedItem as Intervention;
     if (!intervention) return;
     setProcessing(true);
+    setApprovalError(null);
     try {
       await transitionIntervention(intervention.id, {
         status,
         actor_id: 'csm-demo',
         actor_role: 'csm',
         ...(status === 'rejected' ? { reason: 'User rejected' } : {}),
+        ...(status === 'modified' ? { reason: modifyReason, final_action: approvalAction } : {}),
       });
       setDecision(status);
+      setModifying(false);
       refresh();
-    } catch {
-      // On error, still show the decision locally
-      setDecision(status);
+    } catch (error) {
+      setApprovalError(error instanceof Error ? error.message : 'Could not save the approval decision.');
     } finally {
       setProcessing(false);
     }
@@ -704,6 +757,7 @@ function Approvals() {
   return <>
     <FallbackBanner show={usingFallback} />
     <LoadingBar active={loading || accountsLoading} />
+    {approvalError && <p className="inline-error">{approvalError}</p>}
     <section className="approval-layout">
       <motion.article initial={reduce ? false : { opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={reduce ? { duration: 0 } : spring} className="card approval-list">
         <SectionTitle eyebrow="Pending review" title={`${displayCount} governed requests`} action={<button className="icon-btn"><Filter /></button>} />
@@ -716,10 +770,8 @@ function Approvals() {
               </motion.button>;
             })
           : interventionList.map((intervention, index) => {
-              const cached = accountCache[intervention.account_id];
-              const name = cached?.name ?? intervention.account_id;
-              const initials = cached?.initials ?? '??';
-              const mockAcc = { id: intervention.account_id, name, initials, owner: cached?.owner_id ?? '', plan: cached?.plan ?? '', segment: cached?.segment ?? '', industry: cached?.industry ?? '', mrr: '', risk: 0, riskType: '', severity: 'Low' as Severity, health: 0, delta: 0, renewal: '', freshness: '', action: '' };
+              const mockAcc = portfolioAccounts.find((account) => account.id === intervention.account_id) ?? getAccount(intervention.account_id);
+              const name = mockAcc.name;
               return <motion.button initial={reduce ? false : { opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: index * 0.035 }} whileHover={reduce ? undefined : { x: 2 }} whileTap={reduce ? undefined : { scale: 0.985 }} className={selected === index ? "active" : ""} onClick={() => { setSelected(index); setDecision("pending"); }} key={intervention.id}>
                 <Avatar account={mockAcc} small /><span><strong>{name}</strong><small>{intervention.recommended_action}</small><em>{intervention.status}</em></span><b>{intervention.id.slice(0, 8)}</b>
               </motion.button>;
@@ -751,12 +803,13 @@ function Approvals() {
               </div>
               <blockquote>
                 <small>Decision context</small>
-                "{mockProfile.summary} Recommended response: {mockProfile.action.description}"
+                &ldquo;{mockProfile.summary} Recommended response: {mockProfile.action.description}&rdquo;
                 <cite>Template explanation · {usingFallback ? 'deterministic mock data' : 'live API data'}</cite>
               </blockquote>
+              {modifying && <div className="modify-action"><label>Eligible replacement<select value={approvalAction} onChange={(event) => setApprovalAction(event.target.value)}><option value="no_action">No action</option><option value="human_outreach">Human outreach</option><option value="support_escalation">Support escalation</option><option value="plan_review">Flexible plan review</option></select></label><textarea aria-label="Reason for modification" placeholder="Reason for modification" value={modifyReason} onChange={(event) => setModifyReason(event.target.value)} /><button className="primary" disabled={!modifyReason.trim() || processing} onClick={() => handleTransition('modified')}>Save modification</button></div>}
               <div className="approval-actions">
                 <motion.button whileTap={reduce ? undefined : { scale: 0.97 }} className="danger" disabled={processing} onClick={() => handleTransition('rejected')}><X />Reject</motion.button>
-                <motion.button whileTap={reduce ? undefined : { scale: 0.97 }} className="secondary"><Menu />Modify</motion.button>
+                <motion.button whileTap={reduce ? undefined : { scale: 0.97 }} className="secondary" onClick={() => setModifying((value) => !value)}><Menu />Modify</motion.button>
                 <motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.97 }} className="primary" disabled={processing} onClick={() => handleTransition('approved')}>{processing ? 'Processing…' : <><Check />Approve action</>}</motion.button>
               </div>
             </motion.div>
@@ -775,8 +828,6 @@ function Approvals() {
 }
 
 function Outcomes() {
-  const reduce = useReducedMotion();
-
   // Fetch KPIs for acceptance/override rates
   const { data: kpis, loading: kpiLoading, usingFallback: kpiFallback } = useKPIs();
 
@@ -954,8 +1005,51 @@ function Outcomes() {
   </>;
 }
 
+function DataIngestion() {
+  const [file, setFile] = useState<File | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobStatus, setJobStatus] = useState<string | null>(null);
+  const [inserted, setInserted] = useState(0);
+  const [quarantined, setQuarantined] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!file) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await uploadIngestionCsv(file);
+      setJobId(result.job_id);
+      setInserted(result.inserted);
+      setQuarantined(result.quarantined.length);
+      const job = await getIngestionJob(result.job_id);
+      setJobStatus(job.status);
+      setQuarantined(job.quarantined.length);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'The CSV could not be validated.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return <section className="studio-layout ingestion-layout">
+    <form className="card ingestion-card" onSubmit={submit}>
+      <SectionTitle eyebrow="Synthetic data only" title="Validate a CSV ingestion job" detail="Rows must include both id and account_id. The prototype parses and validates the file without silently accepting malformed rows." />
+      <label className="upload-field"><UploadSimple /><span><strong>{file?.name ?? 'Choose a UTF-8 CSV'}</strong><small>No real customer data. CSV only.</small></span><input type="file" accept=".csv,text/csv" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
+      {error && <p className="inline-error">{error}</p>}
+      <button className="primary" type="submit" disabled={!file || submitting}>{submitting ? 'Validating…' : 'Upload and validate'}</button>
+    </form>
+    <aside className="card ingestion-status">
+      <SectionTitle eyebrow="Server job" title={jobId ?? 'No job submitted'} detail="The job status is read back from the FastAPI ingestion endpoint." />
+      <dl><div><dt>Status</dt><dd>{jobStatus ?? 'Waiting for file'}</dd></div><div><dt>Accepted rows</dt><dd>{inserted}</dd></div><div><dt>Quarantined rows</dt><dd>{quarantined}</dd></div></dl>
+      <p className="prototype-note"><ShieldCheck />Validation does not imply the source data is accurate or causally meaningful.</p>
+    </aside>
+  </section>;
+}
+
 function Audit() {
-  const reduce = useReducedMotion();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [entityType, setEntityType] = useState('intervention');
   const [entityId, setEntityId] = useState('');
@@ -970,7 +1064,7 @@ function Audit() {
   // Adapt API logs to frontend format
   const adaptedLogs: FrontendAuditLog[] = useMemo(() => {
     if (!usingFallback && apiLogs.length > 0) {
-      return apiLogs.map((log: any) => adaptAuditLog(log));
+      return apiLogs.map(adaptAuditLog);
     }
     return [];
   }, [apiLogs, usingFallback]);
@@ -1065,15 +1159,14 @@ export function ValueLoopApp({ initialScreen, initialAccountId = "northstar" }: 
   const router = useRouter(); const screen = initialScreen; const [mobile, setMobile] = useState(false); const [fresh, setFresh] = useState(false); const [tour, setTour] = useState(false);
   const reduce = useReducedMotion();
   const { data: pendingInterventions } = useInterventions('pending');
+  const { data: shellAccounts } = useAccounts(false);
   const approvalCount = pendingInterventions.length;
-  const activeAccount = getAccount(initialAccountId); const activeProfile = getChurnProfile(activeAccount.id);
-  // Computed client-side only, after mount, to avoid a server/client hydration mismatch on the date string.
-  const [reportingDate, setReportingDate] = useState<string | null>(null);
-  useEffect(() => { setReportingDate(new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })); }, []);
+  const activeAccount = shellAccounts.find((account) => account.id === initialAccountId) ?? getAccount(initialAccountId); const activeProfile = getChurnProfile(activeAccount.id);
+  const reportingDate = 'Today';
   const select = (s: Screen, accountId?: string) => { router.push(s === "account" ? `/accounts/${accountId ?? activeAccount.id}` : routes[s]); setMobile(false); window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" }); };
   const h: [string, string, string] = screen === "account" ? [`Account / ${activeAccount.name}`, "Customer 360", `${activeProfile?.churnType ?? "Account"}: unified value, risk, evidence, decisions, and activity.`] : headings[screen];
   const activeNav = (id: Screen) => screen === id || screen === "account" && id === "accounts";
   return <div className="shell"><a className="skip-link" href="#main-content">Skip to main content</a><aside className={cx("sidebar", mobile && "open")}><div className="brand"><motion.span initial={reduce ? false : { opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={reduce ? { duration: 0 } : spring}><Activity /></motion.span><div><strong>ValueLoop</strong><small>Customer intelligence</small></div><button aria-label="Close navigation" onClick={() => setMobile(false)}><X /></button></div><nav aria-label="Primary navigation"><small>Workspace</small>{nav.map(([id, label, Icon], index) => <motion.button initial={reduce ? false : { opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: index * 0.035 }} whileHover={reduce ? undefined : { x: 2 }} whileTap={reduce ? undefined : { scale: 0.985 }} key={id} aria-current={activeNav(id) ? "page" : undefined} className={activeNav(id) ? "active" : ""} onClick={() => select(id)}><Icon /><span>{label}</span>{id === "approvals" && <b>{approvalCount}</b>}</motion.button>)}<small className="nav-section">Explore & configure</small>{exploreNav.map(([id, label, Icon], index) => <motion.button initial={reduce ? false : { opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: 0.18 + index * 0.035 }} whileHover={reduce ? undefined : { x: 2 }} whileTap={reduce ? undefined : { scale: 0.985 }} key={id} aria-current={activeNav(id) ? "page" : undefined} className={activeNav(id) ? "active" : ""} onClick={() => select(id)}><Icon /><span>{label}</span>{id === "guide" && <em>Start</em>}</motion.button>)}</nav><div className="sidebar-foot"><motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.99 }} className="fresh-card" onClick={() => setFresh(!fresh)}><span><Database /></span><div><strong>Sources healthy</strong><small>Updated 8 min ago</small></div><ChevronRight /></motion.button><AnimatePresence>{fresh && <motion.div initial={reduce ? false : { opacity: 0, y: 6, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={reduce ? undefined : { opacity: 0, y: 4, scale: 0.98 }} transition={reduce ? { duration: 0 } : spring} className="fresh-pop"><strong>Demo data is current</strong><p>All four sources passed validation.</p><button onClick={() => setFresh(false)}>Run mock refresh</button></motion.div>}</AnimatePresence><div className="user"><span>AR</span><div><strong>Aisha Rahman</strong><small>Customer Success Manager</small></div><MoreHorizontal aria-hidden="true" /></div></div></aside><AnimatePresence>{mobile && <motion.button initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={reduce ? undefined : { opacity: 0 }} className="scrim" onClick={() => setMobile(false)} aria-label="Close navigation" />}</AnimatePresence>
   <main id="main-content"><motion.header initial={reduce ? false : { opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : spring} className="topbar"><motion.button whileTap={reduce ? undefined : { scale: 0.94 }} aria-label="Open navigation" className="menu" onClick={() => setMobile(true)}><Menu /></motion.button><div className="crumb"><LayoutDashboard /><span>Workspace</span><ChevronRight /><strong>{screen === "account" ? activeAccount.name : h[1]}</strong></div><div className="top-actions"><label><span className="sr-only">Search accounts</span><Search /><input aria-label="Search accounts" placeholder="Search accounts..." /><kbd>⌘ K</kbd></label><motion.button whileTap={reduce ? undefined : { scale: 0.92 }} aria-label="View notifications" className="icon-btn notify"><Bell /><i /></motion.button><button aria-label="Change reporting date" className="period">{reportingDate ?? ' '} <ChevronDown /></button></div></motion.header><div className="page"><motion.header initial={reduce ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : { ...spring, delay: 0.04 }} className="page-head"><div><span>{h[0]}</span><h1>{h[1]}</h1><p>{h[2]}</p></div><div className="page-head-actions"><motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} className="secondary tutorial-launch" onClick={() => setTour(true)}><HandPointing />Page tutorial</motion.button>{screen === "overview" && <motion.button whileHover={reduce ? undefined : { y: -2 }} whileTap={reduce ? undefined : { scale: 0.98 }} transition={spring} className="primary" onClick={() => select("risk")}><Gauge />Open risk queue</motion.button>}{screen === "risk" && <motion.button whileTap={reduce ? undefined : { scale: 0.98 }} className="secondary"><Database />Refresh analysis</motion.button>}{screen === "audit" && <motion.button whileTap={reduce ? undefined : { scale: 0.98 }} className="secondary"><ShieldCheck />Manager view</motion.button>}</div></motion.header>
-  <motion.div key={screen} initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : { duration: 0.22, delay: 0.08 }}>{screen === "overview" && <Overview openAccount={(accountId) => select("account", accountId)} openRisk={() => select("risk")} openGuide={() => select("guide")} openPlaybooks={() => select("playbooks")} />}{screen === "risk" && <Queue openAccount={(accountId) => select("account", accountId)} />}{screen === "accounts" && <Queue openAccount={(accountId) => select("account", accountId)} directory />}{screen === "account" && <Customer360 accountId={activeAccount.id} back={() => select("accounts")} />}{screen === "approvals" && <Approvals />}{screen === "outcomes" && <Outcomes />}{screen === "audit" && <Audit />}{screen === "guide" && <GuidedDemo openAccount={(accountId) => select("account", accountId)} openApprovals={() => select("approvals")} openOutcomes={() => select("outcomes")} openPlaybooks={() => select("playbooks")} />}{screen === "playbooks" && <PlaybookStudio openGuide={() => select("guide")} />}</motion.div></div></main>{tour && <PageTour screen={screen} onClose={() => setTour(false)} />}</div>;
+  <motion.div key={screen} initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={reduce ? { duration: 0 } : { duration: 0.22, delay: 0.08 }}>{screen === "overview" && <Overview openAccount={(accountId) => select("account", accountId)} openRisk={() => select("risk")} openGuide={() => select("guide")} openPlaybooks={() => select("playbooks")} />}{screen === "risk" && <Queue openAccount={(accountId) => select("account", accountId)} />}{screen === "accounts" && <Queue openAccount={(accountId) => select("account", accountId)} directory />}{screen === "account" && <Customer360 accountId={initialAccountId} back={() => select("accounts")} />}{screen === "approvals" && <Approvals />}{screen === "outcomes" && <Outcomes />}{screen === "audit" && <Audit />}{screen === "data" && <DataIngestion />}{screen === "guide" && <GuidedDemo openAccount={(accountId) => select("account", accountId)} openApprovals={() => select("approvals")} openOutcomes={() => select("outcomes")} openPlaybooks={() => select("playbooks")} />}{screen === "playbooks" && <PlaybookStudio openGuide={() => select("guide")} />}</motion.div></div></main>{tour && <PageTour screen={screen} onClose={() => setTour(false)} />}</div>;
 }

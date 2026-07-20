@@ -9,6 +9,7 @@ import type {
   ActionRecommendation,
   HealthScore,
   RiskPrediction,
+  RiskHistoryPoint,
   TrendPoint,
   ActionMixEntry,
 } from './api-types';
@@ -182,8 +183,8 @@ function adaptCause(c: BackendCause): CauseHypothesis {
 
 // ─── Backend action → frontend ActionPolicy ────────────────────────────────────
 
-function capLabel(s: string): 'High' | 'Medium' | 'Low' {
-  const v = s.toLowerCase();
+function capLabel(s: string | null): 'High' | 'Medium' | 'Low' {
+  const v = (s ?? 'medium').toLowerCase();
   if (v === 'high') return 'High';
   if (v === 'low') return 'Low';
   return 'Medium';
@@ -191,16 +192,16 @@ function capLabel(s: string): 'High' | 'Medium' | 'Low' {
 
 function adaptAction(a: ActionRecommendation): ActionPolicy {
   return {
-    recommended: a.action_code.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
-    description: a.benefit,
+    recommended: actionLabel(a.action_code),
+    description: `${actionLabel(a.action_code)} is eligible under the current policy and evidence.`,
     benefit: capLabel(a.benefit),
     friction: capLabel(a.friction),
     risk: capLabel(a.risk),
     approvalRequired: a.approval_required,
     approvalReason: a.approval_reason ?? '',
-    explanation: a.benefit,
-    checks: [],
-    rejected: a.rejection_reason ? [{ name: a.action_code, reason: a.rejection_reason }] : [],
+    explanation: a.approval_reason ?? `Policy utility score ${a.utility_score?.toFixed(2) ?? 'not ranked'}.`,
+    checks: ['Eligibility rules passed', 'Consent and frequency policy checked'],
+    rejected: [],
   };
 }
 
@@ -232,7 +233,7 @@ export function adaptAccount(backend: BackendAccount, analysis?: Analysis): Acco
     health: analysis ? analysis.health.overall : 0,
     delta: 0,
     renewal: formatDate(backend.renewal_date),
-    freshness: timeAgo(backend.start_date),
+    freshness: analysis ? timeAgo(analysis.health.generated_at) : 'Analysis pending',
     action: action ? action.action_code.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()) : '',
   };
 }
@@ -241,7 +242,13 @@ export function adaptChurnProfile(analysis: Analysis, account: BackendAccount): 
   const top = topRisk(analysis.risks);
   const sortedCauses = [...analysis.causes].sort((a, b) => a.rank - b.rank);
   const topCause = sortedCauses[0];
-  const action = eligibleAction(analysis.actions);
+  const eligible = analysis.actions
+    .filter((candidate) => candidate.eligibility)
+    .sort((a, b) => (b.utility_score ?? -1) - (a.utility_score ?? -1));
+  const action = eligible.find((candidate) => candidate.action_code !== 'no_action') ?? eligible[0];
+  const rejected = analysis.actions
+    .filter((candidate) => !candidate.eligibility)
+    .map((candidate) => ({ name: actionLabel(candidate.action_code), reason: candidate.rejection_reason ?? 'Policy requirements were not met.' }));
 
   const churnType = topCause ? (causeToChurnType(topCause.cause) as ChurnType) : 'Silent churn';
   const probabilityPct = top ? Math.round(top.probability * 100) : 0;
@@ -256,7 +263,7 @@ export function adaptChurnProfile(analysis: Analysis, account: BackendAccount): 
     health: healthToTuples(analysis.health),
     riskHistory: [],
     causes: sortedCauses.map(adaptCause),
-    action: action ? adaptAction(action) : {
+    action: action ? { ...adaptAction(action), rejected } : {
       recommended: 'No action',
       description: '',
       benefit: 'Low',
@@ -271,6 +278,17 @@ export function adaptChurnProfile(analysis: Analysis, account: BackendAccount): 
     timeline: [],
     outcome: { status: '', response: '', usageDelta: '', healthDelta: '', observation: '' },
   };
+}
+
+export function adaptRiskHistory(points: RiskHistoryPoint[], riskType: string): Array<{ day: string; risk: number }> {
+  return points.map((point) => {
+    const match = point.risks.find((risk) => risk.risk_type === riskType) ?? topRisk(point.risks);
+    const date = new Date(`${point.date}T00:00:00`);
+    return {
+      day: date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }),
+      risk: Math.round((match?.probability ?? 0) * 100),
+    };
+  });
 }
 
 export interface FrontendKPIs {
@@ -330,8 +348,8 @@ export interface FrontendAuditLog {
   action: string;
   entityType: string;
   entityId: string;
-  before: any;
-  after: any;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
   timestamp: string;
   reason: string | null;
 }

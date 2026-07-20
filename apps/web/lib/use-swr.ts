@@ -3,14 +3,16 @@ import {
   getAccounts, getCustomer360, analyzeAccount, getDashboardKPIs,
   getInterventions, getOutcomes, getAudit, getTimeline,
   getDashboardTrend, getDashboardActionMix,
+  getRiskHistory,
+  type AccountRow,
 } from './api';
 import {
   adaptAccount, adaptKPIs, adaptTrend, adaptActionMix,
   type FrontendKPIs, type FrontendTrendPoint, type FrontendActionMix,
 } from './adapters';
-import type { Account } from './mock-data';
 import type {
-  BackendAccount, Analysis, Intervention, Outcome, AuditLog, TimelineEvent, Customer360Response,
+  Analysis, Intervention, Outcome, AuditLog, TimelineEvent, Customer360Response,
+  RiskHistoryPoint,
 } from './api-types';
 import {
   accounts as mockAccounts,
@@ -33,27 +35,23 @@ const swrOpts = { revalidateOnFocus: false, shouldRetryOnError: false };
 
 // ─── Accounts ───────────────────────────────────────────────────────────────────
 
-type AccountRow = BackendAccount & { analysis?: Analysis };
-
-function accountsFetcher(includeAnalysis: boolean): () => Promise<Account[]> {
-  return async () => {
-    const raw = (await getAccounts(includeAnalysis)) as AccountRow[];
-    return raw.map((r) => adaptAccount(r, includeAnalysis ? r.analysis : undefined));
-  };
-}
-
 export function useAccounts(includeAnalysis = false) {
   const key = `/accounts${includeAnalysis ? '?include=analysis' : ''}`;
-  const { data, error, isLoading } = useSWR<Account[]>(
+  const { data, error, isLoading, mutate } = useSWR<AccountRow[]>(
     key,
-    accountsFetcher(includeAnalysis),
-    { fallbackData: mockAccounts, ...swrOpts },
+    () => getAccounts(includeAnalysis),
+    swrOpts,
   );
+  const adapted = data?.map((row) => adaptAccount(row, includeAnalysis ? row.analysis : undefined)) ?? mockAccounts;
+  const analyses = Object.fromEntries((data ?? []).flatMap((row) => row.analysis ? [[row.id, row.analysis]] : []));
   return {
-    data: data ?? mockAccounts,
+    data: adapted,
+    raw: data ?? [],
+    analyses,
     loading: isLoading,
     error,
-    usingFallback: !data || !!error,
+    usingFallback: !!error,
+    refresh: mutate,
   };
 }
 
@@ -66,7 +64,7 @@ export function useCustomer360(id: string | null) {
     swrOpts,
   );
   return {
-    data: data?.account,
+    data,
     loading: isLoading,
     error,
     usingFallback: !data && !isLoading,
@@ -102,6 +100,21 @@ export function useTimeline(id: string | null) {
     loading: isLoading,
     error,
     usingFallback: !data && !isLoading,
+  };
+}
+
+export function useRiskHistory(id: string | null, days = 7) {
+  const { data, error, isLoading, mutate } = useSWR<RiskHistoryPoint[]>(
+    id ? `/accounts/${id}/risk-history?days=${days}` : null,
+    () => getRiskHistory(id!, days),
+    swrOpts,
+  );
+  return {
+    data: data ?? [],
+    loading: isLoading,
+    error,
+    usingFallback: !!error,
+    refresh: mutate,
   };
 }
 
