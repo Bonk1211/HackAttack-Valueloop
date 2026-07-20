@@ -385,7 +385,7 @@ Suggested prototype formula: utility = expected_benefit \* success_probability -
 | Explainability | SHAP                               | Model evidence                                         |
 | Rules          | Python + JSON/YAML policies        | Cause and action decisioning                           |
 | LLM            | Optional API                       | Paraphrasing only                                      |
-| Deployment     | Vercel + Render/Railway + Supabase | Managed prototype hosting                              |
+| Deployment     | Vercel + Supabase                  | Managed web, FastAPI function, and platform hosting    |
 | Scheduling     | APScheduler or cron                | Periodic recalculation                                 |
 
 ![Detailed hackathon prototype system architecture](ValueLoop_Master_Implementation_Blueprint_assets/media/image4.png)

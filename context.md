@@ -41,7 +41,7 @@ The first complete slice must support:
 - **Platform:** Supabase PostgreSQL, Auth, and Storage.
 - **Data/ML:** pandas, transparent logistic-regression baseline, optional XGBoost only if validation improves, and SHAP/direct evidence.
 - **Rules:** versioned Python plus YAML/JSON policies.
-- **Deployment:** Vercel for web; Render or Railway for API; Supabase for platform services.
+- **Deployment:** Vercel for the Next.js web app and FastAPI function; Supabase for platform services.
 
 Backend module seams are `ingestion`, `customer360`, `features`, `health`, `risk`, `causes`, `policy`, `actions`, `explanations`, `interventions`, `outcomes`, and `audit`. Policy eligibility always overrides utility ranking.
 
@@ -65,7 +65,7 @@ Create the 5–8 action registry, eligibility/safety rules, frequency caps, util
 
 ### Phase 4 — Product UI and API Integration (Implemented locally)
 
-The approved interface in `apps/web/` now consumes the FastAPI `/api/v1` contract through typed clients, adapters, and SWR caching. Overview, Risk Queue, Accounts, Customer 360, Approvals, Outcomes, Audit, Guided Demo, Playbooks, and Data Ingestion use live synthetic API data. Deterministic fixtures remain only as an explicit offline/demo fallback. Customer 360 supports the governed pending → approved/modified/rejected → executed → delivered workflow, records observed outcomes, displays live source freshness and risk history, and preserves rejected-action reasons. Dynamic account routes accept all seeded backend account IDs. The deployed Vercel URL may not include these local integration revisions until redeployed; authentication remains Phase 5 work.
+The approved interface in `apps/web/` now consumes the FastAPI `/api/v1` contract through typed clients, adapters, and SWR caching. Overview, Risk Queue, Accounts, Customer 360, Approvals, Outcomes, Audit, Guided Demo, Playbooks, and Data Ingestion use live synthetic API data. Deterministic fixtures remain only as an explicit offline/demo fallback. Customer 360 supports the governed pending → approved/modified/rejected → executed → delivered workflow, records observed outcomes, displays live source freshness and risk history, and preserves rejected-action reasons. Dynamic account routes accept all seeded backend account IDs. The frontend is deployed at `https://web-livid-beta-ilnxxzodh3.vercel.app` and the FastAPI backend at `https://valueloop-api.vercel.app`; authentication remains Phase 5 work.
 
 ### Phase 5 — Hardening and Demo
 

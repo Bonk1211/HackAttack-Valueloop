@@ -10,6 +10,8 @@ The frontend in `apps/web/` is mapped to the FastAPI backend and Supabase-backed
 
 **Live frontend:** [web-livid-beta-ilnxxzodh3.vercel.app](https://web-livid-beta-ilnxxzodh3.vercel.app)
 
+**Live backend:** [valueloop-api.vercel.app](https://valueloop-api.vercel.app/healthz)
+
 The prototype is for Hack Attack 3.0, Case Study 2. It will use synthetic data for 50 accounts and demonstrate mechanisms and workflows—not production predictive accuracy, verified causality, or autonomous customer actions.
 
 ## Core Demo Flow
@@ -36,7 +38,7 @@ Models and optional LLMs may advise, but policies, permissions, and humans contr
 | Data | Supabase PostgreSQL, Auth, Storage | Customer data, roles, uploads, audit history |
 | Intelligence | pandas, scikit-learn/XGBoost, SHAP | Features, risk, confidence, evidence |
 | Control plane | Python and versioned YAML/JSON | Cause rules, eligibility, safety, frequency caps |
-| Deployment | Vercel, Render/Railway, Supabase | Hackathon-ready managed hosting |
+| Deployment | Vercel and Supabase | Managed web, FastAPI function, and platform services |
 
 The backend is a modular monolith with boundaries for ingestion, Customer 360, features, health, risk, causes, policy, actions, explanations, interventions, outcomes, and audit.
 
@@ -98,7 +100,7 @@ pytest --cov=app
 
 See [`services/api/README.md`](services/api/README.md) for full API reference and architecture.
 
-Production routes are `/`, `/guided-demo`, `/playbooks`, `/risk-queue`, `/accounts`, `/accounts/{id}`, `/approvals`, `/outcomes`, `/audit`, and `/data`. Example account IDs include `northstar`, `harborline`, `forgeworks`, `lumen`, `ember`, `cobalt`, `meridian`, and `willow`. Deploy from `apps/web/` with `vercel --prod` after signing in to the Vercel CLI.
+Production routes are `/`, `/guided-demo`, `/playbooks`, `/risk-queue`, `/accounts`, `/accounts/{id}`, `/approvals`, `/outcomes`, `/audit`, and `/data`. Example account IDs include `northstar`, `harborline`, `forgeworks`, `lumen`, `ember`, `cobalt`, `meridian`, and `willow`. Deploy each linked Vercel project with `vercel --prod` from `services/api/` first, then `apps/web/`; the frontend production environment must set `NEXT_PUBLIC_API_URL` to the API's `/api/v1` URL.
 
 For current work, read these documents in order:
 
