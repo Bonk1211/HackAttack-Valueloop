@@ -1,9 +1,9 @@
 id,account_id,recommended_action,final_action,approver,status,channel,reason,created_at,updated_at
-int-northstar-01,northstar,support_escalation,support_escalation,aisha,executed,task,Resolve two unresolved severity-1 tickets before retention outreach.,2026-07-11T04:34:24.474629+00:00,2026-07-18T04:34:24.474629+00:00
-int-harborline-01,harborline,guided_onboarding,guided_onboarding,mei,delivered,email,Only 1 of 5 success goals completed; run goal-led onboarding.,2026-07-06T04:34:24.474629+00:00,2026-07-15T04:34:24.474629+00:00
-int-forgeworks-01,forgeworks,alternative_workflow_review,alternative_workflow_review,daniel,modified,call,Adjusted scope to a workflow workshop after CSM review.,2026-07-09T04:34:24.474629+00:00,2026-07-16T04:34:24.474629+00:00
-int-lumen-01,lumen,flexible_plan_review,flexible_plan_review,mei,approved,email,Utilization at 24% and renewal survey cites price pressure.,2026-07-13T04:34:24.474629+00:00,2026-07-14T04:34:24.474629+00:00
-int-ember-01,ember,payment_retry_card_update,payment_retry_card_update,daniel,executed,email,Card expired; two retry attempts failed.,2026-07-16T04:34:24.474629+00:00,2026-07-19T04:34:24.474629+00:00
-int-cobalt-01,cobalt,differentiation_review,,aisha,rejected,call,Manager declined; insufficient competitor evidence at this time.,2026-07-14T04:34:24.474629+00:00,2026-07-15T04:34:24.474629+00:00
-int-meridian-01,meridian,pause_subscription,pause_subscription,aisha,approved,task,Implementation project closed; documented return window in October.,2026-07-15T04:34:24.474629+00:00,2026-07-17T04:34:24.474629+00:00
-int-willow-01,willow,early_reengagement,early_reengagement,mei,delivered,in_app,Seven licensed seats inactive; no complaint or cancellation signal.,2026-07-17T04:34:24.474629+00:00,2026-07-19T04:34:24.474629+00:00
+int-northstar-01,northstar,support_escalation,support_escalation,aisha,executed,task,Resolve two unresolved severity-1 tickets before retention outreach.,2026-07-12T02:52:23.620108+00:00,2026-07-19T02:52:23.620108+00:00
+int-harborline-01,harborline,guided_onboarding,guided_onboarding,mei,delivered,email,Only 1 of 5 success goals completed; run goal-led onboarding.,2026-07-07T02:52:23.620108+00:00,2026-07-16T02:52:23.620108+00:00
+int-forgeworks-01,forgeworks,alternative_workflow_review,alternative_workflow_review,daniel,modified,call,Adjusted scope to a workflow workshop after CSM review.,2026-07-10T02:52:23.620108+00:00,2026-07-17T02:52:23.620108+00:00
+int-lumen-01,lumen,flexible_plan_review,flexible_plan_review,mei,approved,email,Utilization at 24% and renewal survey cites price pressure.,2026-07-14T02:52:23.620108+00:00,2026-07-15T02:52:23.620108+00:00
+int-ember-01,ember,payment_retry_card_update,payment_retry_card_update,daniel,executed,email,Card expired; two retry attempts failed.,2026-07-17T02:52:23.620108+00:00,2026-07-20T02:52:23.620108+00:00
+int-cobalt-01,cobalt,differentiation_review,,aisha,rejected,call,Manager declined; insufficient competitor evidence at this time.,2026-07-15T02:52:23.620108+00:00,2026-07-16T02:52:23.620108+00:00
+int-meridian-01,meridian,pause_subscription,pause_subscription,aisha,approved,task,Implementation project closed; documented return window in October.,2026-07-16T02:52:23.620108+00:00,2026-07-18T02:52:23.620108+00:00
+int-willow-01,willow,early_reengagement,early_reengagement,mei,delivered,in_app,Seven licensed seats inactive; no complaint or cancellation signal.,2026-07-18T02:52:23.620108+00:00,2026-07-20T02:52:23.620108+00:00

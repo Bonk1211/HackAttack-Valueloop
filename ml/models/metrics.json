@@ -1,0 +1,37 @@
+{
+  "cancellation": {
+    "lr_pr_auc": 0.639,
+    "xgb_pr_auc": 0.6409,
+    "winner": "xgboost",
+    "version": "cancellation-xgb-v1",
+    "base_rate": 0.3875
+  },
+  "downgrade": {
+    "lr_pr_auc": 0.5008,
+    "xgb_pr_auc": 0.4702,
+    "winner": "lr",
+    "version": "downgrade-lr-v1",
+    "base_rate": 0.3412
+  },
+  "inactivity": {
+    "lr_pr_auc": 0.4821,
+    "xgb_pr_auc": 0.4396,
+    "winner": "lr",
+    "version": "inactivity-lr-v1",
+    "base_rate": 0.3237
+  },
+  "payment_failure": {
+    "lr_pr_auc": 0.5974,
+    "xgb_pr_auc": 0.5648,
+    "winner": "lr",
+    "version": "payment_failure-lr-v1",
+    "base_rate": 0.375
+  },
+  "expansion_readiness": {
+    "lr_pr_auc": 0.4918,
+    "xgb_pr_auc": 0.4754,
+    "winner": "lr",
+    "version": "expansion_readiness-lr-v1",
+    "base_rate": 0.3125
+  }
+}

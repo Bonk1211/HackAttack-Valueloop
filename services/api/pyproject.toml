@@ -12,6 +12,9 @@ dependencies = [
     "structlog==24.4.0",
     "uvicorn[standard]==0.32.0",
     "python-multipart==0.0.12",
+    "scikit-learn==1.5.2",
+    "xgboost==2.1.1",
+    "joblib==1.4.2",
 ]
 
 [project.optional-dependencies]

@@ -1,62 +1,62 @@
 id,account_id,metric_type,score,text,timestamp
-fb-northstar-01,northstar,verbatim,,Frustrated with unresolved incident affecting core workflow,2026-07-19T04:34:24.474629+00:00
-fb-harborline-01,harborline,csat,8.0,Training pace could be faster,2026-07-19T18:10:24.474629+00:00
-fb-forgeworks-01,forgeworks,verbatim,,Need a scenario-planning feature; exporting to finish forecasting externally,2026-07-19T21:22:24.474629+00:00
-fb-lumen-01,lumen,verbatim,,Renewal survey: price feels high relative to plan utilization,2026-07-19T11:46:24.474629+00:00
-fb-lumen-02,lumen,nps,4.0,,2026-07-19T11:46:24.474629+00:00
-fb-ember-01,ember,csat,9.0,No issues besides the billing hiccup,2026-07-20T00:34:24.474629+00:00
-fb-cobalt-01,cobalt,verbatim,,Evaluating a named competitor due to a missing policy-simulation feature,2026-07-19T23:46:24.474629+00:00
-fb-meridian-01,meridian,verbatim,,Implementation project complete; planning to resume in October,2026-07-20T02:39:12.474629+00:00
-fb-willow-01,willow,nps,5.0,,2026-07-20T00:34:24.474629+00:00
-fb-atlas-01,atlas,nps,9.0,Ready to expand seats next quarter,2026-07-20T00:10:24.474629+00:00
-fb-harbor-studio-01,harbor-studio,verbatim,,Utilization is low relative to plan tier,2026-07-16T04:34:24.474629+00:00
-fb-harbor-studio-02,harbor-studio,nps,4.0,,2026-07-11T04:34:24.474629+00:00
-fb-harbor-studio-03,harbor-studio,csat,8.0,,2026-07-19T04:34:24.474629+00:00
-fb-cedar-studio-01,cedar-studio,nps,8.0,,2026-07-13T04:34:24.474629+00:00
-fb-copper-ops-01,copper-ops,nps,10.0,,2026-07-11T04:34:24.474629+00:00
-fb-summit-systems-01,summit-systems,csat,5.0,,2026-07-17T04:34:24.474629+00:00
-fb-iron-solutions-01,iron-solutions,verbatim,,Utilization is low relative to plan tier,2026-07-10T04:34:24.474629+00:00
-fb-iron-solutions-02,iron-solutions,nps,6.0,,2026-07-18T04:34:24.474629+00:00
-fb-east-studio-01,east-studio,verbatim,,Reported repeated issues with a core workflow,2026-07-10T04:34:24.474629+00:00
-fb-east-studio-02,east-studio,nps,9.0,,2026-07-16T04:34:24.474629+00:00
-fb-harbor-labs-01,harbor-labs,verbatim,,Reported repeated issues with a core workflow,2026-07-15T04:34:24.474629+00:00
-fb-stone-robotics-01,stone-robotics,nps,9.0,,2026-07-16T04:34:24.474629+00:00
-fb-iron-cloud-01,iron-cloud,csat,6.0,,2026-07-17T04:34:24.474629+00:00
-fb-harbor-robotics-01,harbor-robotics,csat,6.0,,2026-07-12T04:34:24.474629+00:00
-fb-south-partners-01,south-partners,verbatim,,Reported repeated issues with a core workflow,2026-07-17T04:34:24.474629+00:00
-fb-harbor-industries-01,harbor-industries,csat,8.0,,2026-07-18T04:34:24.474629+00:00
-fb-east-ops-01,east-ops,verbatim,,Utilization is low relative to plan tier,2026-07-17T04:34:24.474629+00:00
-fb-east-ops-02,east-ops,nps,3.0,,2026-07-10T04:34:24.474629+00:00
-fb-pine-systems-01,pine-systems,verbatim,,Reported repeated issues with a core workflow,2026-07-10T04:34:24.474629+00:00
-fb-west-cloud-01,west-cloud,csat,8.0,,2026-07-14T04:34:24.474629+00:00
-fb-east-works-01,east-works,nps,8.0,,2026-07-17T04:34:24.474629+00:00
-fb-copper-labs-01,copper-labs,verbatim,,Utilization is low relative to plan tier,2026-07-13T04:34:24.474629+00:00
-fb-copper-labs-02,copper-labs,nps,6.0,,2026-07-16T04:34:24.474629+00:00
-fb-bright-group-01,bright-group,verbatim,,Reported repeated issues with a core workflow,2026-07-18T04:34:24.474629+00:00
-fb-summit-ops-01,summit-ops,csat,7.0,,2026-07-19T04:34:24.474629+00:00
-fb-iron-systems-01,iron-systems,verbatim,,Utilization is low relative to plan tier,2026-07-16T04:34:24.474629+00:00
-fb-iron-systems-02,iron-systems,nps,3.0,,2026-07-17T04:34:24.474629+00:00
-fb-river-systems-01,river-systems,verbatim,,Utilization is low relative to plan tier,2026-07-17T04:34:24.474629+00:00
-fb-river-systems-02,river-systems,nps,4.0,,2026-07-15T04:34:24.474629+00:00
-fb-south-labs-01,south-labs,csat,7.0,,2026-07-13T04:34:24.474629+00:00
-fb-east-labs-01,east-labs,csat,6.0,,2026-07-10T04:34:24.474629+00:00
-fb-cedar-works-01,cedar-works,verbatim,,Utilization is low relative to plan tier,2026-07-11T04:34:24.474629+00:00
-fb-cedar-works-02,cedar-works,nps,5.0,,2026-07-13T04:34:24.474629+00:00
-fb-golden-industries-01,golden-industries,verbatim,,Reported repeated issues with a core workflow,2026-07-12T04:34:24.474629+00:00
-fb-river-analytics-01,river-analytics,csat,7.0,,2026-07-11T04:34:24.474629+00:00
-fb-pine-works-01,pine-works,verbatim,,Reported repeated issues with a core workflow,2026-07-11T04:34:24.474629+00:00
-fb-pine-robotics-01,pine-robotics,verbatim,,Utilization is low relative to plan tier,2026-07-12T04:34:24.474629+00:00
-fb-pine-robotics-02,pine-robotics,nps,3.0,,2026-07-19T04:34:24.474629+00:00
-fb-cedar-systems-01,cedar-systems,csat,9.0,,2026-07-14T04:34:24.474629+00:00
-fb-oak-ops-01,oak-ops,csat,8.0,,2026-07-11T04:34:24.474629+00:00
-fb-pine-studio-01,pine-studio,verbatim,,Reported repeated issues with a core workflow,2026-07-18T04:34:24.474629+00:00
-fb-summit-group-01,summit-group,nps,7.0,,2026-07-10T04:34:24.474629+00:00
-fb-iron-labs-01,iron-labs,csat,6.0,,2026-07-17T04:34:24.474629+00:00
-fb-iron-partners-01,iron-partners,csat,7.0,,2026-07-14T04:34:24.474629+00:00
-fb-summit-partners-01,summit-partners,nps,8.0,,2026-07-13T04:34:24.474629+00:00
-fb-north-analytics-01,north-analytics,nps,6.0,,2026-07-10T04:34:24.474629+00:00
-fb-summit-solutions-01,summit-solutions,csat,7.0,,2026-07-17T04:34:24.474629+00:00
-fb-river-works-01,river-works,csat,7.0,,2026-07-19T04:34:24.474629+00:00
-fb-golden-analytics-01,golden-analytics,csat,6.0,,2026-07-19T04:34:24.474629+00:00
-fb-west-solutions-01,west-solutions,verbatim,,Reported repeated issues with a core workflow,2026-07-18T04:34:24.474629+00:00
-fb-silver-cloud-01,silver-cloud,nps,8.0,,2026-07-19T04:34:24.474629+00:00
+fb-northstar-01,northstar,verbatim,,Frustrated with unresolved incident affecting core workflow,2026-07-20T02:52:23.620108+00:00
+fb-harborline-01,harborline,csat,8.0,Training pace could be faster,2026-07-20T16:28:23.620108+00:00
+fb-forgeworks-01,forgeworks,verbatim,,Need a scenario-planning feature; exporting to finish forecasting externally,2026-07-20T19:40:23.620108+00:00
+fb-lumen-01,lumen,verbatim,,Renewal survey: price feels high relative to plan utilization,2026-07-20T10:04:23.620108+00:00
+fb-lumen-02,lumen,nps,4.0,,2026-07-20T10:04:23.620108+00:00
+fb-ember-01,ember,csat,9.0,No issues besides the billing hiccup,2026-07-20T22:52:23.620108+00:00
+fb-cobalt-01,cobalt,verbatim,,Evaluating a named competitor due to a missing policy-simulation feature,2026-07-20T22:04:23.620108+00:00
+fb-meridian-01,meridian,verbatim,,Implementation project complete; planning to resume in October,2026-07-21T00:57:11.620108+00:00
+fb-willow-01,willow,nps,5.0,,2026-07-20T22:52:23.620108+00:00
+fb-atlas-01,atlas,nps,9.0,Ready to expand seats next quarter,2026-07-20T22:28:23.620108+00:00
+fb-harbor-studio-01,harbor-studio,verbatim,,Utilization is low relative to plan tier,2026-07-17T02:52:23.620108+00:00
+fb-harbor-studio-02,harbor-studio,nps,4.0,,2026-07-12T02:52:23.620108+00:00
+fb-harbor-studio-03,harbor-studio,csat,8.0,,2026-07-20T02:52:23.620108+00:00
+fb-cedar-studio-01,cedar-studio,nps,8.0,,2026-07-14T02:52:23.620108+00:00
+fb-copper-ops-01,copper-ops,nps,10.0,,2026-07-12T02:52:23.620108+00:00
+fb-summit-systems-01,summit-systems,csat,5.0,,2026-07-18T02:52:23.620108+00:00
+fb-iron-solutions-01,iron-solutions,verbatim,,Utilization is low relative to plan tier,2026-07-11T02:52:23.620108+00:00
+fb-iron-solutions-02,iron-solutions,nps,6.0,,2026-07-19T02:52:23.620108+00:00
+fb-east-studio-01,east-studio,verbatim,,Reported repeated issues with a core workflow,2026-07-11T02:52:23.620108+00:00
+fb-east-studio-02,east-studio,nps,9.0,,2026-07-17T02:52:23.620108+00:00
+fb-harbor-labs-01,harbor-labs,verbatim,,Reported repeated issues with a core workflow,2026-07-16T02:52:23.620108+00:00
+fb-stone-robotics-01,stone-robotics,nps,9.0,,2026-07-17T02:52:23.620108+00:00
+fb-iron-cloud-01,iron-cloud,csat,6.0,,2026-07-18T02:52:23.620108+00:00
+fb-harbor-robotics-01,harbor-robotics,csat,6.0,,2026-07-13T02:52:23.620108+00:00
+fb-south-partners-01,south-partners,verbatim,,Reported repeated issues with a core workflow,2026-07-18T02:52:23.620108+00:00
+fb-harbor-industries-01,harbor-industries,csat,8.0,,2026-07-19T02:52:23.620108+00:00
+fb-east-ops-01,east-ops,verbatim,,Utilization is low relative to plan tier,2026-07-18T02:52:23.620108+00:00
+fb-east-ops-02,east-ops,nps,3.0,,2026-07-11T02:52:23.620108+00:00
+fb-pine-systems-01,pine-systems,verbatim,,Reported repeated issues with a core workflow,2026-07-11T02:52:23.620108+00:00
+fb-west-cloud-01,west-cloud,csat,8.0,,2026-07-15T02:52:23.620108+00:00
+fb-east-works-01,east-works,nps,8.0,,2026-07-18T02:52:23.620108+00:00
+fb-copper-labs-01,copper-labs,verbatim,,Utilization is low relative to plan tier,2026-07-14T02:52:23.620108+00:00
+fb-copper-labs-02,copper-labs,nps,6.0,,2026-07-17T02:52:23.620108+00:00
+fb-bright-group-01,bright-group,verbatim,,Reported repeated issues with a core workflow,2026-07-19T02:52:23.620108+00:00
+fb-summit-ops-01,summit-ops,csat,7.0,,2026-07-20T02:52:23.620108+00:00
+fb-iron-systems-01,iron-systems,verbatim,,Utilization is low relative to plan tier,2026-07-17T02:52:23.620108+00:00
+fb-iron-systems-02,iron-systems,nps,3.0,,2026-07-18T02:52:23.620108+00:00
+fb-river-systems-01,river-systems,verbatim,,Utilization is low relative to plan tier,2026-07-18T02:52:23.620108+00:00
+fb-river-systems-02,river-systems,nps,4.0,,2026-07-16T02:52:23.620108+00:00
+fb-south-labs-01,south-labs,csat,7.0,,2026-07-14T02:52:23.620108+00:00
+fb-east-labs-01,east-labs,csat,6.0,,2026-07-11T02:52:23.620108+00:00
+fb-cedar-works-01,cedar-works,verbatim,,Utilization is low relative to plan tier,2026-07-12T02:52:23.620108+00:00
+fb-cedar-works-02,cedar-works,nps,5.0,,2026-07-14T02:52:23.620108+00:00
+fb-golden-industries-01,golden-industries,verbatim,,Reported repeated issues with a core workflow,2026-07-13T02:52:23.620108+00:00
+fb-river-analytics-01,river-analytics,csat,7.0,,2026-07-12T02:52:23.620108+00:00
+fb-pine-works-01,pine-works,verbatim,,Reported repeated issues with a core workflow,2026-07-12T02:52:23.620108+00:00
+fb-pine-robotics-01,pine-robotics,verbatim,,Utilization is low relative to plan tier,2026-07-13T02:52:23.620108+00:00
+fb-pine-robotics-02,pine-robotics,nps,3.0,,2026-07-20T02:52:23.620108+00:00
+fb-cedar-systems-01,cedar-systems,csat,9.0,,2026-07-15T02:52:23.620108+00:00
+fb-oak-ops-01,oak-ops,csat,8.0,,2026-07-12T02:52:23.620108+00:00
+fb-pine-studio-01,pine-studio,verbatim,,Reported repeated issues with a core workflow,2026-07-19T02:52:23.620108+00:00
+fb-summit-group-01,summit-group,nps,7.0,,2026-07-11T02:52:23.620108+00:00
+fb-iron-labs-01,iron-labs,csat,6.0,,2026-07-18T02:52:23.620108+00:00
+fb-iron-partners-01,iron-partners,csat,7.0,,2026-07-15T02:52:23.620108+00:00
+fb-summit-partners-01,summit-partners,nps,8.0,,2026-07-14T02:52:23.620108+00:00
+fb-north-analytics-01,north-analytics,nps,6.0,,2026-07-11T02:52:23.620108+00:00
+fb-summit-solutions-01,summit-solutions,csat,7.0,,2026-07-18T02:52:23.620108+00:00
+fb-river-works-01,river-works,csat,7.0,,2026-07-20T02:52:23.620108+00:00
+fb-golden-analytics-01,golden-analytics,csat,6.0,,2026-07-20T02:52:23.620108+00:00
+fb-west-solutions-01,west-solutions,verbatim,,Reported repeated issues with a core workflow,2026-07-19T02:52:23.620108+00:00
+fb-silver-cloud-01,silver-cloud,nps,8.0,,2026-07-20T02:52:23.620108+00:00
