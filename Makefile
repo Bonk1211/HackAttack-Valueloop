@@ -47,6 +47,11 @@ test-fe-e2e: ## Run production-build Playwright tests
 
 test-release: test test-fe-e2e ## Run all hermetic release gates
 
+# ─── ML ────────────────────────────────────────────────────────────────
+
+train-ml: ## Train risk models (LR + XGBoost) into ml/models/
+	services/api/.venv/bin/python -m ml.train
+
 # ─── Seed ──────────────────────────────────────────────────────────────
 
 seed: ## Seed demo data (50 accounts) into Supabase
